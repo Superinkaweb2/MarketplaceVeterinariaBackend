@@ -1,0 +1,78 @@
+spring:
+  application:
+    name: vet-saas
+  profiles:
+    active: dev
+
+  datasource:
+    url: ${DB_URL}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        format_sql: false
+        jdbc:
+          time_zone: UTC
+
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+
+  mail:
+    host: ${MAIL_HOST}
+    port: ${MAIL_PORT}
+    username: ${MAIL_USERNAME}
+    from-email: ${MAIL_FROM}
+    password: ${MAIL_PASSWORD}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+
+# Configuración personalizada
+app:
+  jwt:
+    secret: ${JWT_SECRET}
+    expiration: 3600000
+    refresh-expiration: 86400000
+  security:
+    encryption:
+      secret: ${APP_ENCRYPTION_SECRET}
+  cors:
+    allowed-origins: ${ALLOWED_ORIGINS:http://localhost:5173}
+
+  # Integraciones Externas
+  external:
+    public-url: ${APP_PUBLIC_URL:https://nelly-unrestorative-ronald.ngrok-free.dev}
+    backend-url: ${APP_BACKEND_URL:https://nelly-unrestorative-ronald.ngrok-free.dev}
+    frontend-url: ${APP_FRONTEND_URL:https://nelly-unrestorative-ronald.ngrok-free.dev}
+    api-peru:
+      base-url: https://dniruc.apisperu.com/api/v1
+      token: ${API_PERU_TOKEN}
+
+    cloudinary:
+      cloud-name: ${CLOUDINARY_CLOUD_NAME}
+      api-key: ${CLOUDINARY_API_KEY}
+      api-secret: ${CLOUDINARY_API_SECRET}
+
+    mercadopago:
+      access-token: ${MP_ACCESS_TOKEN}
+      client-id: ${MP_CLIENT_ID}
+      client-secret: ${MP_CLIENT_SECRET}
+
+    mail:
+      username: ${MAIL_USERNAME}
+
+logging:
+  level:
+    root: INFO
+    com.vet_saas: INFO
+    org.springframework.security: INFO
