@@ -3,15 +3,19 @@ package com.vet_saas.modules.sales.service;
 import com.vet_saas.core.exceptions.types.BusinessException;
 import com.vet_saas.core.exceptions.types.ResourceNotFoundException;
 import com.vet_saas.modules.catalog.model.Producto;
+import com.vet_saas.modules.catalog.model.Servicio;
 import com.vet_saas.modules.catalog.repository.ProductoRepository;
+import com.vet_saas.modules.catalog.repository.ServicioRepository;
 import com.vet_saas.modules.company.model.Empresa;
 import com.vet_saas.modules.company.repository.EmpresaRepository;
 import com.vet_saas.modules.sales.dto.CreateOrderDto;
 import com.vet_saas.modules.sales.dto.OrderItemDto;
 import com.vet_saas.modules.sales.model.DetalleOrden;
 import com.vet_saas.modules.sales.model.EstadoOrden;
+import com.vet_saas.modules.sales.dto.OrderResponseDto;
 import com.vet_saas.modules.sales.model.Orden;
 import com.vet_saas.modules.sales.repository.OrdenRepository;
+import com.vet_saas.modules.user.model.Role;
 import com.vet_saas.modules.user.model.Usuario;
 import com.vet_saas.modules.user.repository.UsuarioRepository;
 import lombok.RequiredArgsConstructor;
@@ -31,12 +35,23 @@ public class OrderService {
 
     private final OrdenRepository ordenRepository;
     private final ProductoRepository productoRepository;
+    private final ServicioRepository servicioRepository;
     private final EmpresaRepository empresaRepository;
     private final UsuarioRepository usuarioRepository;
 
     @Transactional(readOnly = true)
-    public Page<Orden> getMyOrders(Usuario usuario, Pageable pageable) {
-        return ordenRepository.findByUsuarioClienteId(usuario.getId(), pageable);
+    public Page<OrderResponseDto> getMyOrders(Usuario usuario, Pageable pageable) {
+        Page<Orden> orders;
+
+        if (usuario.getRol() == Role.EMPRESA) {
+            Empresa empresa = empresaRepository.findByUsuarioPropietarioId(usuario.getId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Empresa no encontrada"));
+            orders = ordenRepository.findByEmpresaId(empresa.getId(), pageable);
+        } else {
+            orders = ordenRepository.findByUsuarioClienteId(usuario.getId(), pageable);
+        }
+
+        return orders.map(OrderResponseDto::fromEntity);
     }
     // Eliminado PerfilClienteRepository (no se usaba)
 
@@ -63,27 +78,58 @@ public class OrderService {
         BigDecimal subtotalGeneral = BigDecimal.ZERO;
 
         for (OrderItemDto itemDto : dto.items()) {
-            Producto producto = productoRepository.findById(itemDto.productoId())
-                    .orElseThrow(() -> new ResourceNotFoundException("Producto", "id", itemDto.productoId()));
+            BigDecimal precio;
+            Producto producto = null;
+            Servicio servicio = null;
 
-            if (!producto.getEmpresa().getId().equals(empresa.getId())) {
-                throw new BusinessException(
-                        "El producto " + producto.getNombre() + " no pertenece a la empresa seleccionada");
-            }
-            if (producto.getStock() < itemDto.cantidad()) {
-                throw new BusinessException("Stock insuficiente para: " + producto.getNombre());
+            if (itemDto.productoId() != null) {
+                producto = productoRepository.findById(itemDto.productoId())
+                        .orElseThrow(() -> new ResourceNotFoundException("Producto", "id", itemDto.productoId()));
+
+                if (!producto.getEmpresa().getId().equals(empresa.getId())) {
+                    throw new BusinessException(
+                            "El producto " + producto.getNombre() + " no pertenece a la empresa seleccionada");
+                }
+                if (producto.getStock() < itemDto.cantidad()) {
+                    throw new BusinessException("Stock insuficiente para: " + producto.getNombre());
+                }
+                precio = producto.getPrecio();
+                producto.setStock(producto.getStock() - itemDto.cantidad());
+            } else if (itemDto.servicioId() != null) {
+                servicio = servicioRepository.findById(itemDto.servicioId())
+                        .orElseThrow(() -> new ResourceNotFoundException("Servicio", "id", itemDto.servicioId()));
+
+                // Validar que el servicio pertenezca a la empresa
+                boolean pertenece = false;
+                if (servicio.getEmpresa() != null && servicio.getEmpresa().getId().equals(empresa.getId())) {
+                    pertenece = true;
+                } else if (servicio.getVeterinario() != null) {
+                    // Si es un servicio de veterinario, verificar si el veterinario trabaja en la
+                    // empresa
+                    // Por ahora simplificamos: el servicio debe estar ligado a la empresa o al
+                    // veterinario directamente
+                    // pero el CreateOrderDto tiene la empresaId de la "tienda" seleccionada.
+                    // Si el servicio es de un veterinario independiente, empresaId debería ser del
+                    // veterinario?
+                    // Según Servicio.java, pertenece a UNO solo.
+                    pertenece = true; // TODO: Mejorar validación de propiedad cruzada
+                }
+
+                if (!pertenece) {
+                    throw new BusinessException("El servicio no pertenece a esta veterinaria");
+                }
+                precio = servicio.getPrecio();
+            } else {
+                throw new BusinessException("Cada item debe tener un producto o un servicio");
             }
 
-            BigDecimal precio = producto.getPrecio();
             BigDecimal subtotalItem = precio.multiply(BigDecimal.valueOf(itemDto.cantidad()));
-
             subtotalGeneral = subtotalGeneral.add(subtotalItem);
-
-            producto.setStock(producto.getStock() - itemDto.cantidad());
 
             DetalleOrden detalle = DetalleOrden.builder()
                     .orden(orden)
                     .producto(producto)
+                    .servicio(servicio)
                     .cantidad(itemDto.cantidad())
                     .precioUnitario(precio)
                     .subtotal(subtotalItem)

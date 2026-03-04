@@ -16,6 +16,8 @@ public interface SolicitudAdopcionRepository extends JpaRepository<SolicitudAdop
 
     boolean existsByAdopcionIdAndInteresadoId(Long adopcionId, Long interesadoId);
 
+    List<SolicitudAdopcion> findByInteresadoIdOrderByFechaSolicitudDesc(Long interesadoId);
+
     @Modifying
     @Query("UPDATE SolicitudAdopcion s SET s.estado = 'RECHAZADA', s.fechaRespuesta = CURRENT_TIMESTAMP WHERE s.adopcion.id = :adopcionId AND s.id != :aprobadaId AND s.estado = 'PENDIENTE'")
     void rejectOtherApplications(@Param("adopcionId") Long adopcionId, @Param("aprobadaId") Long aprobadaId);

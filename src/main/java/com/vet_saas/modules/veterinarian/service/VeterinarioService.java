@@ -5,11 +5,17 @@ import com.vet_saas.modules.user.model.Usuario;
 import com.vet_saas.modules.user.repository.UsuarioRepository;
 import com.vet_saas.modules.veterinarian.dto.VeterinarioRequest;
 import com.vet_saas.modules.veterinarian.dto.VeterinarioResponse;
+import com.vet_saas.modules.veterinarian.model.VerificationStatus;
 import com.vet_saas.modules.veterinarian.model.Veterinario;
 import com.vet_saas.modules.veterinarian.repository.VeterinarioRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.util.List;
+
+import com.vet_saas.modules.pet.dto.PetResponse;
+import com.vet_saas.modules.pet.repository.MascotaRepository;
 
 @Service
 @RequiredArgsConstructor
@@ -17,6 +23,7 @@ public class VeterinarioService {
 
     private final VeterinarioRepository veterinarioRepository;
     private final UsuarioRepository usuarioRepository;
+    private final MascotaRepository mascotaRepository;
 
     @Transactional
     public VeterinarioResponse createProfile(Long userId, VeterinarioRequest request) {
@@ -46,11 +53,73 @@ public class VeterinarioService {
         return mapToResponse(saved);
     }
 
+    @Transactional
+    public VeterinarioResponse updateProfile(Long userId, VeterinarioRequest request) {
+        Veterinario veterinario = veterinarioRepository.findByUsuarioId(userId)
+                .orElseThrow(() -> new BusinessException("Perfil de veterinario no encontrado"));
+
+        if (request.nombres() != null)
+            veterinario.setNombres(request.nombres());
+        if (request.apellidos() != null)
+            veterinario.setApellidos(request.apellidos());
+        if (request.especialidad() != null)
+            veterinario.setEspecialidad(request.especialidad());
+        if (request.biografia() != null)
+            veterinario.setBiografia(request.biografia());
+        if (request.aniosExperiencia() != null)
+            veterinario.setAniosExperiencia(request.aniosExperiencia());
+        if (request.fotoPerfilUrl() != null)
+            veterinario.setFotoPerfilUrl(request.fotoPerfilUrl());
+
+        if (request.numeroColegiatura() != null
+                && !request.numeroColegiatura().equals(veterinario.getNumeroColegiatura())) {
+            if (veterinarioRepository.existsByNumeroColegiatura(request.numeroColegiatura())) {
+                throw new BusinessException("El número de colegiatura ya está registrado");
+            }
+            veterinario.setNumeroColegiatura(request.numeroColegiatura());
+        }
+
+        return mapToResponse(veterinarioRepository.save(veterinario));
+    }
+
     @Transactional(readOnly = true)
     public VeterinarioResponse getProfileByUserId(Long userId) {
         Veterinario vet = veterinarioRepository.findByUsuarioId(userId)
                 .orElseThrow(() -> new BusinessException("Perfil de veterinario no encontrado"));
         return mapToResponse(vet);
+    }
+
+    @Transactional(readOnly = true)
+    public List<VeterinarioResponse> getAllVerifiedVeterinarians() {
+        return veterinarioRepository.findAll().stream()
+                .filter(v -> v.getEstadoValidacion() == VerificationStatus.VERIFICADO)
+                .map(this::mapToResponse)
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<PetResponse> getPacientesByVeterinarioUsuarioId(Long userId) {
+        Veterinario vet = veterinarioRepository.findByUsuarioId(userId)
+                .orElseThrow(() -> new BusinessException("Perfil de veterinario no encontrado"));
+                
+        return mascotaRepository.findPacientesByVeterinario(vet.getId()).stream()
+                .map(this::mapToPetResponse)
+                .toList();
+    }
+
+    private PetResponse mapToPetResponse(com.vet_saas.modules.pet.model.Mascota mascota) {
+        return new PetResponse(
+                mascota.getId(),
+                mascota.getNombre(),
+                mascota.getEspecie(),
+                mascota.getRaza(),
+                mascota.getSexo() != null ? mascota.getSexo() : null,
+                mascota.getFechaNacimiento(),
+                mascota.getPesoKg(),
+                mascota.getFotoUrl(),
+                mascota.getEsterilizado(),
+                mascota.getObservacionesMedicas(),
+                mascota.getCreatedAt());
     }
 
     private VeterinarioResponse mapToResponse(Veterinario vet) {
@@ -65,7 +134,6 @@ public class VeterinarioService {
                 vet.getAniosExperiencia(),
                 vet.getFotoPerfilUrl(),
                 vet.getEstadoValidacion(),
-                vet.getUsuario().getCorreo()
-        );
+                vet.getUsuario().getCorreo());
     }
 }

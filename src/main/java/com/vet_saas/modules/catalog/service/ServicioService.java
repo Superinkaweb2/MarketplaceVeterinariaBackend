@@ -25,9 +25,16 @@ public class ServicioService {
     private final ServicioRepository servicioRepository;
     private final EmpresaRepository empresaRepository;
     private final VeterinarioRepository veterinarioRepository;
+    private final com.vet_saas.core.service.StorageService storageService;
 
     @Transactional
-    public ServiceResponse createService(Usuario usuario, CreateServiceDto dto) {
+    public ServiceResponse createService(Usuario usuario, CreateServiceDto dto,
+            org.springframework.web.multipart.MultipartFile imagen) {
+        String imagenUrl = null;
+        if (imagen != null && !imagen.isEmpty()) {
+            imagenUrl = storageService.uploadFile(imagen, "catalogo/servicios");
+        }
+
         Servicio servicio = Servicio.builder()
                 .nombre(dto.nombre())
                 .descripcion(dto.descripcion())
@@ -36,6 +43,7 @@ public class ServicioService {
                 .modalidad(dto.modalidad())
                 .visible(dto.visible() != null ? dto.visible() : true)
                 .activo(true)
+                .imagenUrl(imagenUrl)
                 .build();
 
         assignOwnership(usuario, servicio);
@@ -44,7 +52,8 @@ public class ServicioService {
     }
 
     @Transactional
-    public ServiceResponse updateService(Usuario usuario, Long id, UpdateServiceDto dto) {
+    public ServiceResponse updateService(Usuario usuario, Long id, UpdateServiceDto dto,
+            org.springframework.web.multipart.MultipartFile imagen) {
         Servicio servicio = getPropioServicio(usuario, id);
 
         if (dto.nombre() != null)
@@ -59,6 +68,14 @@ public class ServicioService {
             servicio.setModalidad(dto.modalidad());
         if (dto.visible() != null)
             servicio.setVisible(dto.visible());
+
+        if (imagen != null && !imagen.isEmpty()) {
+            // Delete old image if exists
+            if (servicio.getImagenUrl() != null) {
+                storageService.deleteFile(servicio.getImagenUrl());
+            }
+            servicio.setImagenUrl(storageService.uploadFile(imagen, "catalogo/servicios"));
+        }
 
         return mapToResponse(servicioRepository.save(servicio));
     }
@@ -86,8 +103,9 @@ public class ServicioService {
     }
 
     @Transactional(readOnly = true)
-    public Page<ServiceResponse> getMarketplaceServices(Long empresaId, Long veterinarioId, Pageable pageable) {
-        return servicioRepository.findMarketplaceServices(empresaId, veterinarioId, pageable)
+    public Page<ServiceResponse> getMarketplaceServices(String q, Long empresaId, Long veterinarioId,
+            Pageable pageable) {
+        return servicioRepository.findMarketplaceServices(q, empresaId, veterinarioId, pageable)
                 .map(this::mapToResponse);
     }
 
@@ -167,8 +185,8 @@ public class ServicioService {
                 servicio.perteneceAVeterinario() ? servicio.getVeterinario().getId() : null,
                 servicio.perteneceAVeterinario() ? servicio.getVeterinario().getNombres() : null,
                 servicio.perteneceAVeterinario() ? servicio.getVeterinario().getApellidos() : null,
+                servicio.getImagenUrl(),
                 null,
-                null
-        );
+                null);
     }
 }

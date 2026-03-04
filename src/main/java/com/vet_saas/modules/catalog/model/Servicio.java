@@ -57,6 +57,9 @@ public class Servicio {
     @Column(nullable = false)
     private Boolean visible = true;
 
+    @Column(name = "imagen_url")
+    private String imagenUrl;
+
     @Version
     private Long version;
 

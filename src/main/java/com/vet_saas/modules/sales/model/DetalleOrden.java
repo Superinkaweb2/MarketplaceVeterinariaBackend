@@ -1,6 +1,7 @@
 package com.vet_saas.modules.sales.model;
 
 import com.vet_saas.modules.catalog.model.Producto;
+import com.vet_saas.modules.catalog.model.Servicio;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -33,9 +34,9 @@ public class DetalleOrden {
     @JoinColumn(name = "producto_id")
     private Producto producto;
 
-    // @ManyToOne
-    // @JoinColumn(name = "servicio_id")
-    // private Servicio servicio; // Aún no creamos la entidad Servicio, déjalo comentado o créala vacía.
+    @ManyToOne
+    @JoinColumn(name = "servicio_id")
+    private Servicio servicio;
 
     @Column(nullable = false)
     private Integer cantidad;

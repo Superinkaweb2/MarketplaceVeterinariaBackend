@@ -22,72 +22,73 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/v1/pets")
 @RequiredArgsConstructor
-@PreAuthorize("hasRole('CLIENTE')")
+@PreAuthorize("isAuthenticated()")
 public class PetController {
 
-    private final PetService petService;
-    private final StorageService storageService;
+        private final PetService petService;
+        private final StorageService storageService;
 
-    @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public ResponseEntity<ApiResponse<PetResponse>> createPet(
-            @AuthenticationPrincipal Usuario usuario,
-            @RequestPart("data") @Valid CreatePetDto dto,
-            @RequestPart(value = "foto", required = false) MultipartFile foto) {
-        String fotoUrl = null;
-        if (foto != null && !foto.isEmpty()) {
-            fotoUrl = storageService.uploadFile(foto, "mascotas");
+        @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+        public ResponseEntity<ApiResponse<PetResponse>> createPet(
+                        @AuthenticationPrincipal Usuario usuario,
+                        @RequestPart("data") @Valid CreatePetDto dto,
+                        @RequestPart(value = "foto", required = false) MultipartFile foto) {
+                String fotoUrl = null;
+                if (foto != null && !foto.isEmpty()) {
+                        fotoUrl = storageService.uploadFile(foto, "mascotas");
+                }
+
+                return ResponseEntity.status(HttpStatus.CREATED).body(
+                                ApiResponse.success(
+                                                petService.createPet(usuario, dto, fotoUrl),
+                                                "Mascota registrada exitosamente"));
         }
 
-        return ResponseEntity.status(HttpStatus.CREATED).body(
-                ApiResponse.success(
-                        petService.createPet(usuario, dto, fotoUrl),
-                        "Mascota registrada exitosamente"));
-    }
-
-    @GetMapping
-    public ResponseEntity<ApiResponse<List<PetResponse>>> getMyPets(
-            @AuthenticationPrincipal Usuario usuario) {
-        return ResponseEntity.ok(
-                ApiResponse.success(
-                        petService.getMyPets(usuario),
-                        "Lista de mascotas recuperadas"));
-    }
-
-    @GetMapping("/{id}")
-    public ResponseEntity<ApiResponse<PetResponse>> getPetById(
-            @AuthenticationPrincipal Usuario usuario,
-            @PathVariable Long id) {
-        return ResponseEntity.ok(
-                ApiResponse.success(
-                        petService.getPetById(usuario, id),
-                        "Mascota recuperada exitosamente"));
-    }
-
-    @PutMapping(value = "/{id}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public ResponseEntity<ApiResponse<PetResponse>> updatePet(
-            @AuthenticationPrincipal Usuario usuario,
-            @PathVariable Long id,
-            @RequestPart(value = "data", required = false) @Valid UpdatePetDto dto,
-            @RequestPart(value = "foto", required = false) MultipartFile foto) {
-        String fotoUrl = null;
-        if (foto != null && !foto.isEmpty()) {
-            fotoUrl = storageService.uploadFile(foto, "mascotas");
+        @GetMapping
+        public ResponseEntity<ApiResponse<List<PetResponse>>> getMyPets(
+                        @AuthenticationPrincipal Usuario usuario) {
+                return ResponseEntity.ok(
+                                ApiResponse.success(
+                                                petService.getMyPets(usuario),
+                                                "Lista de mascotas recuperadas"));
         }
 
-        UpdatePetDto safeDto = dto != null ? dto : new UpdatePetDto(null, null, null, null, null, null, null, null);
+        @GetMapping("/{id}")
+        public ResponseEntity<ApiResponse<PetResponse>> getPetById(
+                        @AuthenticationPrincipal Usuario usuario,
+                        @PathVariable Long id) {
+                return ResponseEntity.ok(
+                                ApiResponse.success(
+                                                petService.getPetById(usuario, id),
+                                                "Mascota recuperada exitosamente"));
+        }
 
-        return ResponseEntity.ok(
-                ApiResponse.success(
-                        petService.updatePet(usuario, id, safeDto, fotoUrl),
-                        "Mascota actualizada exitosamente"));
-    }
+        @PutMapping(value = "/{id}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+        public ResponseEntity<ApiResponse<PetResponse>> updatePet(
+                        @AuthenticationPrincipal Usuario usuario,
+                        @PathVariable Long id,
+                        @RequestPart(value = "data", required = false) @Valid UpdatePetDto dto,
+                        @RequestPart(value = "foto", required = false) MultipartFile foto) {
+                String fotoUrl = null;
+                if (foto != null && !foto.isEmpty()) {
+                        fotoUrl = storageService.uploadFile(foto, "mascotas");
+                }
 
-    @DeleteMapping("/{id}")
-    public ResponseEntity<ApiResponse<Void>> deletePet(
-            @AuthenticationPrincipal Usuario usuario,
-            @PathVariable Long id) {
-        petService.deletePet(usuario, id);
-        return ResponseEntity.ok(
-                ApiResponse.success(null, "Mascota eliminada exitosamente"));
-    }
+                UpdatePetDto safeDto = dto != null ? dto
+                                : new UpdatePetDto(null, null, null, null, null, null, null, null);
+
+                return ResponseEntity.ok(
+                                ApiResponse.success(
+                                                petService.updatePet(usuario, id, safeDto, fotoUrl),
+                                                "Mascota actualizada exitosamente"));
+        }
+
+        @DeleteMapping("/{id}")
+        public ResponseEntity<ApiResponse<Void>> deletePet(
+                        @AuthenticationPrincipal Usuario usuario,
+                        @PathVariable Long id) {
+                petService.deletePet(usuario, id);
+                return ResponseEntity.ok(
+                                ApiResponse.success(null, "Mascota eliminada exitosamente"));
+        }
 }

@@ -9,4 +9,6 @@ import java.util.Optional;
 @Repository
 public interface SuscripcionRepository extends JpaRepository<Suscripcion, Long> {
     Optional<Suscripcion> findByEmpresaId(Long empresaId);
+
+    Optional<Suscripcion> findByVeterinarioId(Long veterinarioId);
 }

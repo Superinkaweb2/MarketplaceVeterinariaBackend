@@ -121,6 +121,14 @@ public class AdoptionService {
                 .collect(Collectors.toList());
     }
 
+    @Transactional(readOnly = true)
+    public List<ApplicationResponse> getMySentApplications(Usuario usuario) {
+        return solicitudRepository.findByInteresadoIdOrderByFechaSolicitudDesc(usuario.getId())
+                .stream()
+                .map(this::mapToApplicationResponse)
+                .collect(Collectors.toList());
+    }
+
     @Transactional
     public void respondToApplication(Usuario usuario, Long solicitudId, RespondApplicationDto dto) {
         try {

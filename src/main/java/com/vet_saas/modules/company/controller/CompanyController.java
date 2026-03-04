@@ -7,6 +7,7 @@ import com.vet_saas.modules.company.dto.CreateCompanyDto;
 import com.vet_saas.modules.company.dto.UpdateCompanyDto;
 import com.vet_saas.modules.company.dto.UpdateMercadoPagoCredentialsDto;
 import com.vet_saas.modules.company.service.CompanyService;
+import com.vet_saas.modules.pet.dto.PetResponse;
 import com.vet_saas.modules.user.model.Usuario;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -77,6 +78,16 @@ public class CompanyController {
                                 ApiResponse.success(
                                                 companyService.getProfile(usuario),
                                                 "Perfil de empresa recuperado exitosamente"));
+        }
+
+        @GetMapping("/me/patients")
+        @PreAuthorize("hasRole('EMPRESA')")
+        public ResponseEntity<ApiResponse<java.util.List<PetResponse>>> getMyPatients(
+                        @AuthenticationPrincipal Usuario usuario) {
+                return ResponseEntity.ok(
+                                ApiResponse.success(
+                                                companyService.getPatientsByCompany(usuario),
+                                                "Pacientes de la empresa recuperados exitosamente"));
         }
 
         @PatchMapping("/mercadopago")

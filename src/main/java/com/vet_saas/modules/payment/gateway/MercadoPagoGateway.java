@@ -44,6 +44,8 @@ public class MercadoPagoGateway {
                     .metadata(metadata)
                     .backUrls(PreferenceBackUrlsRequest.builder()
                             .success(successUrl)
+                            .failure(successUrl) // Redigir al mismo lugar para que el frontend maneje el estado
+                            .pending(successUrl)
                             .build())
                     .autoReturn("approved")
                     .notificationUrl(notificationUrl)
@@ -52,7 +54,10 @@ public class MercadoPagoGateway {
 
             Preference preference = preferenceClient.create(preferenceRequest, requestOptions);
 
-            return new PaymentPreferenceResponse(preference.getId(), preference.getInitPoint());
+            return new PaymentPreferenceResponse(
+                    preference.getId(),
+                    preference.getInitPoint(),
+                    preference.getSandboxInitPoint());
 
         } catch (Exception e) {
             LOGGER.error("Error al crear preferencia en Mercado Pago", e);

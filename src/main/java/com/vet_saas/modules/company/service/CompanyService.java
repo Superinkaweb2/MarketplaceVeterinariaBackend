@@ -11,6 +11,8 @@ import com.vet_saas.modules.company.repository.EmpresaRepository;
 import com.vet_saas.modules.subscription.service.SubscriptionService;
 import com.vet_saas.modules.user.model.Usuario;
 import com.vet_saas.modules.veterinarian.model.VerificationStatus;
+import com.vet_saas.modules.pet.dto.PetResponse;
+import com.vet_saas.modules.pet.repository.MascotaRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -23,6 +25,7 @@ public class CompanyService {
     private final CryptoUtil cryptoUtil;
     private final AppProperties appProperties;
     private final SubscriptionService subscriptionService;
+    private final MascotaRepository mascotaRepository;
 
     @Transactional
     public CompanyResponse createProfile(Usuario usuario, CreateCompanyDto dto, String logoUrl, String bannerUrl) {
@@ -164,6 +167,31 @@ public class CompanyService {
         } catch (Exception e) {
             throw new BusinessException("Error al conectar con Mercado Pago: " + e.getMessage());
         }
+    }
+
+    @Transactional(readOnly = true)
+    public java.util.List<PetResponse> getPatientsByCompany(Usuario usuario) {
+        Empresa empresa = empresaRepository.findByUsuarioPropietarioId(usuario.getId())
+                .orElseThrow(() -> new BusinessException("No se encontró el perfil de empresa para este usuario"));
+
+        return mascotaRepository.findPacientesByEmpresa(empresa.getId()).stream()
+                .map(this::mapToPetResponse)
+                .toList();
+    }
+
+    private PetResponse mapToPetResponse(com.vet_saas.modules.pet.model.Mascota mascota) {
+        return new PetResponse(
+                mascota.getId(),
+                mascota.getNombre(),
+                mascota.getEspecie(),
+                mascota.getRaza(),
+                mascota.getSexo() != null ? mascota.getSexo() : null,
+                mascota.getFechaNacimiento(),
+                mascota.getPesoKg(),
+                mascota.getFotoUrl(),
+                mascota.getEsterilizado(),
+                mascota.getObservacionesMedicas(),
+                mascota.getCreatedAt());
     }
 
     private CompanyResponse mapToResponse(Empresa empresa) {
