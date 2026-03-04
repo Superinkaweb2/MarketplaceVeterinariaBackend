@@ -4,10 +4,9 @@ import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
 
 public record OrderItemDto(
-        @NotNull
-        Long productoId,
+                Long productoId,
 
-        @NotNull
-        @Min(1)
-        Integer cantidad
-) {}
+                Long servicioId,
+
+                @NotNull @Min(1) Integer cantidad) {
+}

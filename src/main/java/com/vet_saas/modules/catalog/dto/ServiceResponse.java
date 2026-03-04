@@ -5,19 +5,20 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 public record ServiceResponse(
-        Long id,
-        String nombre,
-        String descripcion,
-        BigDecimal precio,
-        Integer duracionMinutos,
-        ModalidadServicio modalidad,
-        Boolean activo,
-        Boolean visible,
-        Long empresaId,
-        String empresaNombre,
-        Long veterinarioId,
-        String veterinarioNombres,
-        String veterinarioApellidos,
-        LocalDateTime createdAt,
-        LocalDateTime updatedAt) {
+                Long id,
+                String nombre,
+                String descripcion,
+                BigDecimal precio,
+                Integer duracionMinutos,
+                ModalidadServicio modalidad,
+                Boolean activo,
+                Boolean visible,
+                Long empresaId,
+                String empresaNombre,
+                Long veterinarioId,
+                String veterinarioNombres,
+                String veterinarioApellidos,
+                String imagenUrl,
+                LocalDateTime createdAt,
+                LocalDateTime updatedAt) {
 }

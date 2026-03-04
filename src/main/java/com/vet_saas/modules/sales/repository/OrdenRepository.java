@@ -18,6 +18,8 @@ public interface OrdenRepository extends JpaRepository<Orden, Long> {
 
         Page<Orden> findByUsuarioClienteId(Long usuarioId, Pageable pageable);
 
+        Page<Orden> findByEmpresaId(Long empresaId, Pageable pageable);
+
         @Query("SELECT o FROM Orden o JOIN FETCH o.detalles d JOIN FETCH d.producto WHERE o.id = :id")
         Optional<Orden> findByIdWithDetails(@Param("id") Long id);
 
@@ -58,4 +60,7 @@ public interface OrdenRepository extends JpaRepository<Orden, Long> {
                         "WHERE o.empresa.id = :empresaId " +
                         "AND o.estado = 'PAGADO'")
         Long countDistinctClientesByEmpresa(@Param("empresaId") Long empresaId);
+
+        @Query("SELECT COALESCE(SUM(o.total), 0) FROM Orden o WHERE o.estado = :estado")
+        BigDecimal sumTotalByEstado(@Param("estado") EstadoOrden estado);
 }

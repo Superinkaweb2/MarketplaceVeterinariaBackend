@@ -12,4 +12,6 @@ public interface PlanRepository extends JpaRepository<Plan, Long> {
     List<Plan> findAllByActivoTrue();
 
     Optional<Plan> findByNombre(String nombre);
+
+    Optional<Plan> findByNombreIgnoreCase(String nombre);
 }

@@ -30,9 +30,13 @@ public interface ServicioRepository extends JpaRepository<Servicio, Long> {
                         "LEFT JOIN FETCH s.empresa " +
                         "LEFT JOIN FETCH s.veterinario " +
                         "WHERE s.visible = true AND s.activo = true " +
-                        "AND (CAST(:empresaId AS long) IS NULL OR s.empresa.id = :empresaId) " +
-                        "AND (CAST(:veterinarioId AS long) IS NULL OR s.veterinario.id = :veterinarioId)")
+                        "AND (CAST(:q AS string) IS NULL OR LOWER(s.nombre) LIKE LOWER(CONCAT('%', CAST(:q AS string), '%')) "
+                        +
+                        "OR LOWER(s.descripcion) LIKE LOWER(CONCAT('%', CAST(:q AS string), '%'))) " +
+                        "AND (:empresaId IS NULL OR s.empresa.id = :empresaId) " +
+                        "AND (:veterinarioId IS NULL OR s.veterinario.id = :veterinarioId)")
         Page<Servicio> findMarketplaceServices(
+                        @Param("q") String q,
                         @Param("empresaId") Long empresaId,
                         @Param("veterinarioId") Long veterinarioId,
                         Pageable pageable);

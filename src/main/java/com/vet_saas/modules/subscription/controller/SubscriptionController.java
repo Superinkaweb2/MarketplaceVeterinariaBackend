@@ -1,8 +1,10 @@
 package com.vet_saas.modules.subscription.controller;
 
 import com.vet_saas.core.response.ApiResponse;
+import com.vet_saas.modules.payment.dto.PaymentPreferenceResponse;
+import com.vet_saas.modules.subscription.dto.PlanResponseDto;
+import com.vet_saas.modules.subscription.dto.SuscripcionResponseDto;
 import com.vet_saas.modules.subscription.dto.SubscriptionUsageDto;
-import com.vet_saas.modules.subscription.model.Plan;
 import com.vet_saas.modules.subscription.model.Suscripcion;
 import com.vet_saas.modules.subscription.service.SubscriptionService;
 import com.vet_saas.modules.user.model.Usuario;
@@ -19,38 +21,50 @@ import java.util.List;
 @RequiredArgsConstructor
 public class SubscriptionController {
 
-    private final SubscriptionService subscriptionService;
+        private final SubscriptionService subscriptionService;
 
-    @GetMapping("/plans")
-    public ResponseEntity<ApiResponse<List<Plan>>> getPlans() {
-        return ResponseEntity.ok(ApiResponse.success(
-                subscriptionService.getAvailablePlans(),
-                "Planes de suscripción recuperados exitosamente"));
-    }
+        @GetMapping("/plans")
+        public ResponseEntity<ApiResponse<List<PlanResponseDto>>> getPlans() {
+                return ResponseEntity.ok(ApiResponse.success(
+                                subscriptionService.getAvailablePlans(),
+                                "Planes de suscripción recuperados exitosamente"));
+        }
 
-    @GetMapping("/me")
-    @PreAuthorize("hasRole('EMPRESA')")
-    public ResponseEntity<ApiResponse<Suscripcion>> getMySubscription(@AuthenticationPrincipal Usuario usuario) {
-        return ResponseEntity.ok(ApiResponse.success(
-                subscriptionService.getSuscripcionActual(usuario),
-                "Suscripción actual recuperada exitosamente"));
-    }
+        @GetMapping("/me")
+        @PreAuthorize("hasAnyRole('EMPRESA', 'VETERINARIO')")
+        public ResponseEntity<ApiResponse<SuscripcionResponseDto>> getMySubscription(
+                        @AuthenticationPrincipal Usuario usuario) {
+                return ResponseEntity.ok(ApiResponse.success(
+                                subscriptionService.getSuscripcionActual(usuario),
+                                "Suscripción actual recuperada exitosamente"));
+        }
 
-    @PatchMapping("/update-plan")
-    public ResponseEntity<ApiResponse<Suscripcion>> updatePlan(
-            @RequestParam Long empresaId,
-            @RequestParam Long planId) {
-        return ResponseEntity.ok(ApiResponse.success(
-                subscriptionService.updatePlan(empresaId, planId),
-                "Plan de suscripción actualizado con éxito"));
-    }
+        @PatchMapping("/update-plan")
+        @PreAuthorize("hasAnyRole('EMPRESA', 'VETERINARIO')")
+        public ResponseEntity<ApiResponse<SuscripcionResponseDto>> updatePlan(
+                        @AuthenticationPrincipal Usuario usuario,
+                        @RequestParam Long planId) {
+                return ResponseEntity.ok(ApiResponse.success(
+                                subscriptionService.updatePlanForUsuario(usuario, planId),
+                                "Plan de suscripción actualizado con éxito"));
+        }
 
-    @GetMapping("/usage/me")
-    @PreAuthorize("hasRole('EMPRESA')")
-    public ResponseEntity<ApiResponse<SubscriptionUsageDto>> getUsage(@AuthenticationPrincipal Usuario usuario) {
-        return ResponseEntity.ok(ApiResponse.success(
-                subscriptionService.getUsageMetrics(usuario),
-                "Métricas de uso recuperadas exitosamente"));
-    }
+        @GetMapping("/usage/me")
+        @PreAuthorize("hasAnyRole('EMPRESA', 'VETERINARIO')")
+        public ResponseEntity<ApiResponse<SubscriptionUsageDto>> getUsage(@AuthenticationPrincipal Usuario usuario) {
+                return ResponseEntity.ok(ApiResponse.success(
+                                subscriptionService.getUsageMetrics(usuario),
+                                "Métricas de uso recuperadas exitosamente"));
+        }
+
+        @PostMapping("/checkout/{planId}")
+        @PreAuthorize("hasAnyRole('EMPRESA', 'VETERINARIO')")
+        public ResponseEntity<ApiResponse<PaymentPreferenceResponse>> createCheckout(
+                        @AuthenticationPrincipal Usuario usuario,
+                        @PathVariable Long planId) {
+                return ResponseEntity.ok(ApiResponse.success(
+                                subscriptionService.createSubscriptionCheckout(usuario, planId),
+                                "Preferencia de pago generada exitosamente"));
+        }
 
 }

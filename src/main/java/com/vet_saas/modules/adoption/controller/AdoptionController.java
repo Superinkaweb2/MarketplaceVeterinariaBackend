@@ -63,6 +63,15 @@ public class AdoptionController {
                                                 "Tus publicaciones de adopción recuperadas"));
         }
 
+        @GetMapping("/applications/me")
+        public ResponseEntity<ApiResponse<List<ApplicationResponse>>> getMySentApplications(
+                        @AuthenticationPrincipal Usuario usuario) {
+                return ResponseEntity.ok(
+                                ApiResponse.success(
+                                                adoptionService.getMySentApplications(usuario),
+                                                "Tus solicitudes de adopción enviadas recuperadas"));
+        }
+
         @PostMapping("/{id}/apply")
         public ResponseEntity<ApiResponse<Void>> applyForAdoption(
                         @AuthenticationPrincipal Usuario usuario,

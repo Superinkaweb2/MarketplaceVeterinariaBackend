@@ -61,7 +61,7 @@ public class ClienteService {
      * Actualizar perfil propio del usuario autenticado (rol CLIENTE).
      */
     @Transactional
-    public ClienteResponse updateMyPerfil(Usuario usuario, UpdateClienteDto dto) {
+    public ClienteResponse updateMyPerfil(Usuario usuario, UpdateClienteDto dto, String fotoUrl) {
         PerfilCliente perfil = clienteRepository.findByUsuarioId(usuario.getId())
                 .orElseThrow(() -> new ResourceNotFoundException("PerfilCliente", "usuarioId", usuario.getId()));
 
@@ -77,6 +77,10 @@ public class ClienteService {
             perfil.setCiudad(dto.ciudad());
         if (dto.pais() != null)
             perfil.setPais(dto.pais());
+
+        if (fotoUrl != null) {
+            perfil.setFotoPerfilUrl(fotoUrl);
+        }
 
         return mapToResponse(clienteRepository.save(perfil));
     }

@@ -37,6 +37,22 @@ public class PaymentController {
             @PathVariable Long empresaId,
             @RequestParam Map<String, String> queryParams,
             @RequestBody(required = false) Map<String, Object> body) {
+        return handleWebhook(empresaId, queryParams, body);
+    }
+
+    @PostMapping("/webhook")
+    public ResponseEntity<Void> receivePlatformWebhook(
+            @RequestParam Map<String, String> queryParams,
+            @RequestBody(required = false) Map<String, Object> body) {
+        // Para suscripciones, la empresa_id vendrá en la metadata, no en el path
+        return handleWebhook(null, queryParams, body);
+    }
+
+    private ResponseEntity<Void> handleWebhook(
+            Long pathEmpresaId,
+            Map<String, String> queryParams,
+            Map<String, Object> body) {
+
         String type = queryParams.get("type");
         String topic = queryParams.get("topic");
 
@@ -44,8 +60,13 @@ public class PaymentController {
         if (id == null)
             id = queryParams.get("id");
         if (id == null && body != null && body.containsKey("data")) {
-            Map<String, Object> data = (Map<String, Object>) body.get("data");
-            id = data.get("id").toString();
+            Object dataObj = body.get("data");
+            if (dataObj instanceof Map) {
+                Map<String, Object> data = (Map<String, Object>) dataObj;
+                if (data.containsKey("id")) {
+                    id = data.get("id").toString();
+                }
+            }
         }
 
         if (id == null) {
@@ -57,9 +78,9 @@ public class PaymentController {
             String finalId = id;
             CompletableFuture.runAsync(() -> {
                 try {
-                    paymentService.processWebhook(finalId, empresaId);
+                    paymentService.processWebhook(finalId, pathEmpresaId);
                 } catch (Exception e) {
-                    LOGGER.error("Error en procesamiento asíncrono", e);
+                    LOGGER.error("Error en procesamiento asíncrono de webhook", e);
                 }
             });
         }

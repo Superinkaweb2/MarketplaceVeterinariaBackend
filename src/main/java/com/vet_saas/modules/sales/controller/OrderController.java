@@ -2,7 +2,7 @@ package com.vet_saas.modules.sales.controller;
 
 import com.vet_saas.core.response.ApiResponse;
 import com.vet_saas.modules.sales.dto.CreateOrderDto;
-import com.vet_saas.modules.sales.model.Orden;
+import com.vet_saas.modules.sales.dto.OrderResponseDto;
 import com.vet_saas.modules.sales.service.OrderService;
 import com.vet_saas.modules.user.model.Usuario;
 import jakarta.validation.Valid;
@@ -32,7 +32,7 @@ public class OrderController {
     }
 
     @GetMapping("/me")
-    public ResponseEntity<ApiResponse<Page<Orden>>> getMyOrders(
+    public ResponseEntity<ApiResponse<Page<OrderResponseDto>>> getMyOrders(
             @AuthenticationPrincipal Usuario usuario,
             Pageable pageable) {
         return ResponseEntity.ok(

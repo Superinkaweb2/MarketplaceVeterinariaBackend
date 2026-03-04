@@ -1,6 +1,7 @@
 package com.vet_saas.modules.subscription.model;
 
 import com.vet_saas.modules.company.model.Empresa;
+import com.vet_saas.modules.veterinarian.model.Veterinario;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -25,8 +26,12 @@ public class Suscripcion {
     private Long id;
 
     @OneToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "empresa_id", nullable = false, unique = true)
+    @JoinColumn(name = "empresa_id", unique = true)
     private Empresa empresa;
+
+    @OneToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "veterinario_id", unique = true)
+    private Veterinario veterinario;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "plan_id", nullable = false)

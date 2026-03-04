@@ -23,6 +23,7 @@ import org.springframework.web.bind.annotation.*;
 public class ClienteController {
 
     private final ClienteService clienteService;
+    private final com.vet_saas.core.service.StorageService storageService;
 
     // =========================================================================
     // SELF-SERVICE — rol CLIENTE
@@ -55,17 +56,40 @@ public class ClienteController {
     }
 
     /**
+     * PUT /api/v1/clients/me
+     * Actualizar perfil propio del cliente logueado (soporta multipart para foto).
+     */
+    @PutMapping(value = "/me", consumes = org.springframework.http.MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("hasRole('CLIENTE')")
+    public ResponseEntity<ApiResponse<ClienteResponse>> updateMyPerfil(
+            @AuthenticationPrincipal Usuario usuario,
+            @RequestPart(value = "data", required = false) @Valid UpdateClienteDto dto,
+            @RequestPart(value = "foto", required = false) org.springframework.web.multipart.MultipartFile foto) {
+
+        String fotoUrl = null;
+        if (foto != null && !foto.isEmpty()) {
+            fotoUrl = storageService.uploadFile(foto, "clientes");
+        }
+
+        UpdateClienteDto safeDto = dto != null ? dto : new UpdateClienteDto(null, null, null, null, null, null);
+
+        return ResponseEntity
+                .ok(ApiResponse.success(clienteService.updateMyPerfil(usuario, safeDto, fotoUrl),
+                        "Perfil actualizado"));
+    }
+
+    /**
      * PATCH /api/v1/clients/me
-     * Actualizar perfil propio del cliente logueado.
+     * Actualizar perfil propio del cliente logueado (legacy JSON version).
      */
     @PatchMapping("/me")
     @PreAuthorize("hasRole('CLIENTE')")
-    public ResponseEntity<ApiResponse<ClienteResponse>> updateMyPerfil(
+    public ResponseEntity<ApiResponse<ClienteResponse>> updateMyPerfilLegacy(
             @AuthenticationPrincipal Usuario usuario,
             @RequestBody @Valid UpdateClienteDto dto) {
 
         return ResponseEntity
-                .ok(ApiResponse.success(clienteService.updateMyPerfil(usuario, dto), "Perfil actualizado"));
+                .ok(ApiResponse.success(clienteService.updateMyPerfil(usuario, dto, null), "Perfil actualizado"));
     }
 
     /**
