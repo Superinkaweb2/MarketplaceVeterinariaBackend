@@ -93,14 +93,30 @@ public class PaymentService {
                         .build());
             }
 
-            // Payer: Correo real del comprador y nombres de su perfil
-            PreferencePayerRequest.PreferencePayerRequestBuilder payerBuilder = PreferencePayerRequest.builder()
-                    .email(orden.getUsuarioCliente().getCorreo());
+            boolean isSandbox = appProperties.getExternal().getMercadoPago().isSandbox();
+            String payerEmail = null;
+
+            if (isSandbox) {
+                String configuredEmail = appProperties.getExternal().getMercadoPago().getSandboxBuyerEmail();
+                if (configuredEmail != null && !configuredEmail.isBlank()) {
+                    payerEmail = configuredEmail;
+                    LOGGER.info("Sandbox detectado: usando email de prueba '{}' como payer", payerEmail);
+                } else {
+                    LOGGER.info("Sandbox detectado: dejando email en blanco para ingreso manual en el checkout");
+                }
+            } else {
+                payerEmail = orden.getUsuarioCliente().getCorreo();
+            }
+
+            PreferencePayerRequest.PreferencePayerRequestBuilder payerBuilder = PreferencePayerRequest.builder();
+            if (payerEmail != null) {
+                payerBuilder.email(payerEmail);
+            }
 
             if (perfil != null) {
                 payerBuilder.name(perfil.getNombres() + " " + perfil.getApellidos());
             } else {
-                payerBuilder.name("Cliente Vetsaas");
+                payerBuilder.name("Cliente Huella360");
             }
 
             PreferencePayerRequest payer = payerBuilder.build();
@@ -185,8 +201,8 @@ public class PaymentService {
             return;
         }
 
-        // Convertir de forma segura ya que MP puede enviar números como decimales (ej:
-        // 1.0)
+        // Convertir de forma segura ya que MP puede enviar números como decimales
+        // (ej:1.0)
         Long empresaId = metadata.containsKey("empresa_id")
                 ? Double.valueOf(metadata.get("empresa_id").toString()).longValue()
                 : null;
@@ -211,11 +227,18 @@ public class PaymentService {
             throw new ForbiddenException("El pago no pertenece a esta empresa.");
         }
 
-        // 4. Buscar Orden
-        Orden orden = ordenRepository.findByCodigoOrden(payment.getExternalReference())
+        // 4. Lock the order row — serializes concurrent webhook processing
+        Orden orden = ordenRepository.findByCodigoOrdenForUpdate(payment.getExternalReference())
                 .orElseThrow(() -> new BusinessException("Orden no encontrada: " + payment.getExternalReference()));
 
-        // 5. Mapeo de Estados
+        // 5. Re-check idempotency AFTER acquiring lock (the first thread may have
+        // already inserted)
+        if (pagoRepository.existsByMpPaymentId(payment.getId().toString())) {
+            LOGGER.info("Webhook duplicado ignorado (post-lock idempotencia). paymentId: {}", payment.getId());
+            return;
+        }
+
+        // 6. Mapeo de Estados
         String mpStatus = payment.getStatus();
         EstadoOrden nuevoEstado = switch (mpStatus) {
             case "approved" -> EstadoOrden.PAGADO;
@@ -224,7 +247,7 @@ public class PaymentService {
             default -> orden.getEstado();
         };
 
-        // 6. Actualización de Base de Datos
+        // 7. Actualización de Base de Datos
         if (nuevoEstado != orden.getEstado()) {
             orden.setEstado(nuevoEstado);
             orden.setMetodoPago(payment.getPaymentMethodId());
@@ -232,7 +255,7 @@ public class PaymentService {
             LOGGER.info("Orden {} actualizada al estado {}", orden.getCodigoOrden(), nuevoEstado);
         }
 
-        // 7. Registro de Pago (Evidencia)
+        // 8. Registro de Pago (Evidencia)
         Empresa empresa = empresaRepository.findById(mpEmpresaId).orElseThrow();
         Pago pagoModel = Pago.builder()
                 .empresa(empresa)
@@ -245,7 +268,7 @@ public class PaymentService {
 
         pagoRepository.save(pagoModel);
 
-        // 8. Evento de Negocio
+        // 9. Evento de Negocio
         if (nuevoEstado == EstadoOrden.PAGADO) {
             eventPublisher.publishEvent(new OrderPaidEvent(this, orden));
         }

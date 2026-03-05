@@ -54,6 +54,8 @@ public class AppProperties {
         private String accessToken;
         private String clientId;
         private String clientSecret;
+        private String sandboxBuyerEmail;
+        private boolean sandbox = false;
     }
 
     @Data

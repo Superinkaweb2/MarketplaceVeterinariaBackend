@@ -4,6 +4,7 @@ import com.vet_saas.core.response.ApiResponse;
 import com.vet_saas.modules.admin.dto.AdminCompanyResponseDto;
 import com.vet_saas.modules.admin.dto.AdminStatsDto;
 import com.vet_saas.modules.admin.dto.AdminUserResponseDto;
+import com.vet_saas.modules.admin.dto.AdminVeterinarioResponseDto;
 import com.vet_saas.modules.admin.service.AdminService;
 import com.vet_saas.modules.company.repository.EmpresaRepository;
 import lombok.RequiredArgsConstructor;
@@ -51,5 +52,18 @@ public class AdminController {
     public ResponseEntity<ApiResponse<Page<AdminCompanyResponseDto>>> getAllCompanies(
             @PageableDefault(size = 20) Pageable pageable) {
         return ResponseEntity.ok(ApiResponse.success(adminService.getAllCompanies(pageable), "Empresas recuperadas"));
+    }
+
+    @GetMapping("/veterinarios")
+    public ResponseEntity<ApiResponse<Page<AdminVeterinarioResponseDto>>> getAllVeterinarios(
+            @PageableDefault(size = 20) Pageable pageable) {
+        return ResponseEntity
+                .ok(ApiResponse.success(adminService.getAllVeterinarios(pageable), "Veterinarios recuperados"));
+    }
+
+    @PatchMapping("/veterinarios/{id}/toggle-status")
+    public ResponseEntity<ApiResponse<Void>> toggleVeterinarioStatus(@PathVariable Long id) {
+        adminService.toggleVeterinarioStatus(id);
+        return ResponseEntity.ok(ApiResponse.success(null, "Estatus del veterinario actualizado"));
     }
 }

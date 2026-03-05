@@ -54,4 +54,35 @@ public class AuthController {
         return ResponseEntity.ok(
                 ApiResponse.success("Todas las sesiones han sido cerradas"));
     }
+
+    @PostMapping("/change-password")
+    public ResponseEntity<ApiResponse<Void>> changePassword(
+            @AuthenticationPrincipal Usuario usuario,
+            @RequestBody @Valid ChangePasswordRequest request) {
+        authService.changePassword(usuario.getId(), request);
+        return ResponseEntity.ok(
+                ApiResponse.success("Contraseña actualizada exitosamente"));
+    }
+
+    @org.springframework.web.bind.annotation.GetMapping("/verify-email")
+    public ResponseEntity<ApiResponse<Void>> verifyEmail(
+            @org.springframework.web.bind.annotation.RequestParam String token) {
+        authService.verifyEmail(token);
+        return ResponseEntity.ok(
+                ApiResponse.success("Correo verificado exitosamente"));
+    }
+
+    @PostMapping("/forgot-password")
+    public ResponseEntity<ApiResponse<Void>> forgotPassword(@RequestBody @Valid ForgotPasswordRequest request) {
+        authService.forgotPassword(request.correo());
+        return ResponseEntity.ok(
+                ApiResponse.success("Se ha enviado un correo para restablecer tu contraseña"));
+    }
+
+    @PostMapping("/reset-password")
+    public ResponseEntity<ApiResponse<Void>> resetPassword(@RequestBody @Valid ResetPasswordRequest request) {
+        authService.resetPassword(request.token(), request.newPassword());
+        return ResponseEntity.ok(
+                ApiResponse.success("Tu contraseña ha sido restablecida exitosamente"));
+    }
 }

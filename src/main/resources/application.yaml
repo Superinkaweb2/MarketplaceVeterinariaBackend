@@ -67,6 +67,8 @@ app:
       access-token: ${MP_ACCESS_TOKEN}
       client-id: ${MP_CLIENT_ID}
       client-secret: ${MP_CLIENT_SECRET}
+      sandbox-buyer-email: ${MP_SANDBOX_BUYER_EMAIL:}
+      sandbox: ${MP_SANDBOX:true}
 
     mail:
       username: ${MAIL_USERNAME}
