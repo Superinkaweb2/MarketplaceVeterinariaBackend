@@ -29,7 +29,8 @@ public class EmailService {
 
     /**
      * Envia el email de confirmacion de orden.
-     * Se ejecuta de forma asincrona y no debe afectar el flujo principal del dominio.
+     * Se ejecuta de forma asincrona y no debe afectar el flujo principal del
+     * dominio.
      */
     @Async("mailExecutor")
     @Transactional(readOnly = true)
@@ -37,8 +38,7 @@ public class EmailService {
 
         try {
             Orden orden = ordenRepository.findByIdForEmail(ordenId)
-                    .orElseThrow(() ->
-                            new IllegalStateException("Order not found for email: " + ordenId));
+                    .orElseThrow(() -> new IllegalStateException("Order not found for email: " + ordenId));
 
             String emailDestino = orden.getUsuarioCliente().getCorreo();
 
@@ -54,12 +54,10 @@ public class EmailService {
             context.setVariable("items", orden.getDetalles());
             context.setVariable("total", orden.getTotal());
 
-            String htmlContent =
-                    templateEngine.process("email/order-confirmation", context);
+            String htmlContent = templateEngine.process("email/order-confirmation", context);
 
             MimeMessage message = mailSender.createMimeMessage();
-            MimeMessageHelper helper =
-                    new MimeMessageHelper(message, true, "UTF-8");
+            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
 
             helper.setTo(emailDestino);
             helper.setSubject("Confirmación de compra - " + orden.getCodigoOrden());
@@ -121,6 +119,67 @@ public class EmailService {
 
         } catch (Exception ex) {
             LOGGER.error("Error sending welcome email to {} error={}", usuario.getCorreo(), ex.getMessage(), ex);
+        }
+    }
+
+    /**
+     * Envia un correo de verificación de email.
+     */
+    @Async("mailExecutor")
+    public void sendVerificationEmail(Usuario usuario, String token) {
+        try {
+            Context context = new Context();
+            context.setVariable("nombreUsuario", usuario.getCorreo());
+            context.setVariable("token", token);
+            // URL base extraída de config o properties
+            String verificationUrl = "http://localhost:5173/auth/verify-email?token=" + token;
+            context.setVariable("verificationUrl", verificationUrl);
+
+            String htmlContent = templateEngine.process("email/verify-email", context);
+
+            MimeMessage message = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+
+            helper.setTo(usuario.getCorreo());
+            helper.setSubject("Verifica tu correo - VetSaaS");
+            helper.setText(htmlContent, true);
+            helper.setFrom(appProperties.getExternal().getMail().getUsername());
+
+            mailSender.send(message);
+
+            LOGGER.info("Verification email sent to {}", usuario.getCorreo());
+        } catch (Exception ex) {
+            LOGGER.error("Error sending verification email to {} error={}", usuario.getCorreo(), ex.getMessage(), ex);
+        }
+    }
+
+    /**
+     * Envia un correo de restablecimiento de contraseña.
+     */
+    @Async("mailExecutor")
+    public void sendPasswordResetEmail(Usuario usuario, String token) {
+        try {
+            Context context = new Context();
+            context.setVariable("nombreUsuario", usuario.getCorreo());
+            context.setVariable("token", token);
+            String resetUrl = "http://localhost:5173/auth/reset-password?token=" + token;
+            context.setVariable("resetUrl", resetUrl);
+
+            String htmlContent = templateEngine.process("email/password-reset", context);
+
+            MimeMessage message = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+
+            helper.setTo(usuario.getCorreo());
+            helper.setSubject("Restablece tu contraseña - VetSaaS");
+            helper.setText(htmlContent, true);
+            helper.setFrom(appProperties.getExternal().getMail().getUsername());
+
+            mailSender.send(message);
+
+            LOGGER.info("Password reset email sent to {}", usuario.getCorreo());
+        } catch (Exception ex) {
+            LOGGER.error("Error sending reset email to {} error={}", usuario.getCorreo(), ex.getMessage(), ex);
         }
     }
 }
