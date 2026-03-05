@@ -4,10 +4,12 @@ import com.vet_saas.modules.sales.model.Orden;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import jakarta.persistence.LockModeType;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.Optional;
@@ -24,6 +26,14 @@ public interface OrdenRepository extends JpaRepository<Orden, Long> {
         Optional<Orden> findByIdWithDetails(@Param("id") Long id);
 
         Optional<Orden> findByCodigoOrden(String codigoOrden);
+
+        /**
+         * Acquires a row-level PESSIMISTIC_WRITE lock (SELECT ... FOR UPDATE).
+         * Serializes concurrent webhook processing for the same order.
+         */
+        @Lock(LockModeType.PESSIMISTIC_WRITE)
+        @Query("SELECT o FROM Orden o WHERE o.codigoOrden = :codigoOrden")
+        Optional<Orden> findByCodigoOrdenForUpdate(@Param("codigoOrden") String codigoOrden);
 
         @Query("SELECT o FROM Orden o " +
                         "JOIN FETCH o.usuarioCliente " +

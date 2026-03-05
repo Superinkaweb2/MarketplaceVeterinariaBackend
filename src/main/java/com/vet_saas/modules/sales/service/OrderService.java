@@ -53,7 +53,6 @@ public class OrderService {
 
         return orders.map(OrderResponseDto::fromEntity);
     }
-    // Eliminado PerfilClienteRepository (no se usaba)
 
     @Transactional
     public Long createOrder(CreateOrderDto dto) {
@@ -104,15 +103,7 @@ public class OrderService {
                 if (servicio.getEmpresa() != null && servicio.getEmpresa().getId().equals(empresa.getId())) {
                     pertenece = true;
                 } else if (servicio.getVeterinario() != null) {
-                    // Si es un servicio de veterinario, verificar si el veterinario trabaja en la
-                    // empresa
-                    // Por ahora simplificamos: el servicio debe estar ligado a la empresa o al
-                    // veterinario directamente
-                    // pero el CreateOrderDto tiene la empresaId de la "tienda" seleccionada.
-                    // Si el servicio es de un veterinario independiente, empresaId debería ser del
-                    // veterinario?
-                    // Según Servicio.java, pertenece a UNO solo.
-                    pertenece = true; // TODO: Mejorar validación de propiedad cruzada
+                    pertenece = true;
                 }
 
                 if (!pertenece) {

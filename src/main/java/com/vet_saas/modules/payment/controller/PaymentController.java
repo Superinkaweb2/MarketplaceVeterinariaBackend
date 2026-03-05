@@ -6,7 +6,9 @@ import com.vet_saas.modules.payment.service.PaymentService;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.ResponseEntity;
+import org.springframework.transaction.UnexpectedRollbackException;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Map;
@@ -79,6 +81,9 @@ public class PaymentController {
             CompletableFuture.runAsync(() -> {
                 try {
                     paymentService.processWebhook(finalId, pathEmpresaId);
+                } catch (DataIntegrityViolationException | UnexpectedRollbackException e) {
+                    // Concurrent duplicate webhook — safely ignored (idempotency)
+                    LOGGER.info("Webhook duplicado ignorado por concurrencia. paymentId: {}", finalId);
                 } catch (Exception e) {
                     LOGGER.error("Error en procesamiento asíncrono de webhook", e);
                 }
