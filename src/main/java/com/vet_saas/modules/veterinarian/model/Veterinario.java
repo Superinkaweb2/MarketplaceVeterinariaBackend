@@ -2,6 +2,8 @@ package com.vet_saas.modules.veterinarian.model;
 
 import com.vet_saas.modules.user.model.Usuario;
 import jakarta.persistence.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -46,6 +48,7 @@ public class Veterinario {
     private String fotoPerfilUrl;
 
     @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.NAMED_ENUM)
     @Column(name = "estado_validacion")
     private VerificationStatus estadoValidacion;
 

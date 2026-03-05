@@ -3,6 +3,7 @@ package com.vet_saas.modules.admin.service;
 import com.vet_saas.modules.admin.dto.AdminCompanyResponseDto;
 import com.vet_saas.modules.admin.dto.AdminStatsDto;
 import com.vet_saas.modules.admin.dto.AdminUserResponseDto;
+import com.vet_saas.modules.admin.dto.AdminVeterinarioResponseDto;
 import com.vet_saas.modules.adoption.repository.AdopcionRepository;
 import com.vet_saas.modules.catalog.repository.ProductoRepository;
 import com.vet_saas.modules.company.repository.EmpresaRepository;
@@ -83,6 +84,26 @@ public class AdminService {
         empresaRepository.save(empresa);
     }
 
+    @Transactional(readOnly = true)
+    public Page<AdminVeterinarioResponseDto> getAllVeterinarios(Pageable pageable) {
+        return veterinarioRepository.findAll(pageable)
+                .map(this::mapToVeterinarioResponse);
+    }
+
+    @Transactional
+    public void toggleVeterinarioStatus(Long veterinarioId) {
+        var veterinario = veterinarioRepository.findById(veterinarioId)
+                .orElseThrow(() -> new ResourceNotFoundException("Veterinario", "id", veterinarioId));
+
+        if (veterinario.getEstadoValidacion() == VerificationStatus.VERIFICADO) {
+            veterinario.setEstadoValidacion(VerificationStatus.RECHAZADO);
+        } else {
+            veterinario.setEstadoValidacion(VerificationStatus.VERIFICADO);
+        }
+
+        veterinarioRepository.save(veterinario);
+    }
+
     private AdminCompanyResponseDto mapToCompanyResponse(com.vet_saas.modules.company.model.Empresa e) {
         return AdminCompanyResponseDto.builder()
                 .id(e.getId())
@@ -108,6 +129,24 @@ public class AdminService {
                 .emailVerificado(u.isEmailVerificado())
                 .createdAt(u.getCreatedAt())
                 .nombre(u.getCorreo().split("@")[0]) // Temporary fallback, ideally join with profile
+                .build();
+    }
+
+    private AdminVeterinarioResponseDto mapToVeterinarioResponse(
+            com.vet_saas.modules.veterinarian.model.Veterinario v) {
+        return AdminVeterinarioResponseDto.builder()
+                .id(v.getId())
+                .nombres(v.getNombres())
+                .apellidos(v.getApellidos())
+                .correo(v.getUsuario() != null ? v.getUsuario().getCorreo() : null)
+                .especialidad(v.getEspecialidad())
+                .numeroColegiatura(v.getNumeroColegiatura())
+                .biografia(v.getBiografia())
+                .aniosExperiencia(v.getAniosExperiencia())
+                .fotoPerfilUrl(v.getFotoPerfilUrl())
+                .estadoValidacion(v.getEstadoValidacion())
+                .usuarioActivo(v.getUsuario() != null && v.getUsuario().isEstado())
+                .createdAt(v.getCreatedAt())
                 .build();
     }
 }
