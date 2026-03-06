@@ -1,6 +1,7 @@
 package com.vet_saas.modules.payment.model;
 
 import com.vet_saas.modules.company.model.Empresa;
+import com.vet_saas.modules.veterinarian.model.Veterinario;
 import com.vet_saas.modules.sales.model.Orden;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
@@ -25,8 +26,12 @@ public class Pago {
     private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "empresa_id", nullable = false)
+    @JoinColumn(name = "empresa_id")
     private Empresa empresa;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "veterinario_id")
+    private Veterinario veterinario;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "orden_id", nullable = false)

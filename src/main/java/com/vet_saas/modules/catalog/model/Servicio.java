@@ -4,6 +4,8 @@ import com.vet_saas.core.exceptions.types.BusinessException;
 import com.vet_saas.modules.company.model.Empresa;
 import com.vet_saas.modules.veterinarian.model.Veterinario;
 import jakarta.persistence.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -46,6 +48,8 @@ public class Servicio {
     private Integer duracionMinutos = 30;
 
     @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.NAMED_ENUM)
+    @Column(columnDefinition = "service_modality")
     @Builder.Default
     private ModalidadServicio modalidad = ModalidadServicio.PRESENCIAL;
 

@@ -18,6 +18,8 @@ import com.vet_saas.modules.sales.repository.OrdenRepository;
 import com.vet_saas.modules.user.model.Role;
 import com.vet_saas.modules.user.model.Usuario;
 import com.vet_saas.modules.user.repository.UsuarioRepository;
+import com.vet_saas.modules.veterinarian.model.Veterinario;
+import com.vet_saas.modules.veterinarian.repository.VeterinarioRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -37,6 +39,7 @@ public class OrderService {
     private final ProductoRepository productoRepository;
     private final ServicioRepository servicioRepository;
     private final EmpresaRepository empresaRepository;
+    private final VeterinarioRepository veterinarioRepository;
     private final UsuarioRepository usuarioRepository;
 
     @Transactional(readOnly = true)
@@ -59,8 +62,18 @@ public class OrderService {
         String email = SecurityContextHolder.getContext().getAuthentication().getName();
         Usuario usuario = usuarioRepository.findByCorreo(email).orElseThrow();
 
-        Empresa empresa = empresaRepository.findById(dto.empresaId())
-                .orElseThrow(() -> new ResourceNotFoundException("Empresa", "id", dto.empresaId()));
+        Empresa empresa = null;
+        Veterinario veterinario = null;
+
+        if (dto.empresaId() != null) {
+            empresa = empresaRepository.findById(dto.empresaId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Empresa", "id", dto.empresaId()));
+        } else if (dto.veterinarioId() != null) {
+            veterinario = veterinarioRepository.findById(dto.veterinarioId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Veterinario", "id", dto.veterinarioId()));
+        } else {
+            throw new BusinessException("Debe indicar una Empresa o un Veterinario para la orden");
+        }
 
         String codigo = "ORD-" + System.currentTimeMillis();
 
@@ -68,6 +81,7 @@ public class OrderService {
                 .codigoOrden(codigo)
                 .usuarioCliente(usuario)
                 .empresa(empresa)
+                .veterinario(veterinario)
                 .estado(EstadoOrden.PENDIENTE)
                 .detalles(new ArrayList<>())
                 .direccionEnvio(new HashMap<>())
@@ -85,24 +99,27 @@ public class OrderService {
                 producto = productoRepository.findById(itemDto.productoId())
                         .orElseThrow(() -> new ResourceNotFoundException("Producto", "id", itemDto.productoId()));
 
-                if (!producto.getEmpresa().getId().equals(empresa.getId())) {
+                if (empresa != null
+                        && (producto.getEmpresa() == null || !producto.getEmpresa().getId().equals(empresa.getId()))) {
                     throw new BusinessException(
-                            "El producto " + producto.getNombre() + " no pertenece a la empresa seleccionada");
+                            "El producto " + producto.getNombre() + " no pertenece a la veterinaria seleccionada");
                 }
                 if (producto.getStock() < itemDto.cantidad()) {
                     throw new BusinessException("Stock insuficiente para: " + producto.getNombre());
                 }
-                precio = producto.getPrecio();
+                precio = producto.getPrecioActual();
                 producto.setStock(producto.getStock() - itemDto.cantidad());
             } else if (itemDto.servicioId() != null) {
                 servicio = servicioRepository.findById(itemDto.servicioId())
                         .orElseThrow(() -> new ResourceNotFoundException("Servicio", "id", itemDto.servicioId()));
 
-                // Validar que el servicio pertenezca a la empresa
+                // Validar que el servicio pertenezca al vendor seleccionado
                 boolean pertenece = false;
-                if (servicio.getEmpresa() != null && servicio.getEmpresa().getId().equals(empresa.getId())) {
+                if (empresa != null && servicio.getEmpresa() != null
+                        && servicio.getEmpresa().getId().equals(empresa.getId())) {
                     pertenece = true;
-                } else if (servicio.getVeterinario() != null) {
+                } else if (veterinario != null && servicio.getVeterinario() != null
+                        && servicio.getVeterinario().getId().equals(veterinario.getId())) {
                     pertenece = true;
                 }
 

@@ -3,11 +3,13 @@ package com.vet_saas.modules.payment.controller;
 import com.vet_saas.modules.payment.dto.PaymentPreferenceResponse;
 import com.vet_saas.core.response.ApiResponse;
 import com.vet_saas.modules.payment.service.PaymentService;
+import com.vet_saas.modules.user.model.Usuario;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.transaction.UnexpectedRollbackException;
 import org.springframework.web.bind.annotation.*;
 
@@ -24,19 +26,18 @@ public class PaymentController {
 
     @PostMapping("/checkout/{orderId}")
     public ResponseEntity<ApiResponse<PaymentPreferenceResponse>> generatePaymentLink(
-            @PathVariable Long orderId) {
+            @PathVariable Long orderId,
+            @AuthenticationPrincipal Usuario usuarioActual) {
 
-        PaymentPreferenceResponse response = paymentService.createCheckoutUrl(orderId);
+        PaymentPreferenceResponse response = paymentService.createCheckoutUrl(orderId, usuarioActual);
 
         LOGGER.info("Checkout link generated orderId={}", orderId);
-
-        return ResponseEntity.ok(
-                ApiResponse.success(response, "Link de pago generado exitosamente"));
+        return ResponseEntity.ok(ApiResponse.success(response, "Link de pago generado exitosamente"));
     }
 
     @PostMapping("/webhook/{empresaId}")
     public ResponseEntity<Void> receiveWebhook(
-            @PathVariable Long empresaId,
+            @PathVariable String empresaId,
             @RequestParam Map<String, String> queryParams,
             @RequestBody(required = false) Map<String, Object> body) {
         return handleWebhook(empresaId, queryParams, body);
@@ -51,7 +52,7 @@ public class PaymentController {
     }
 
     private ResponseEntity<Void> handleWebhook(
-            Long pathEmpresaId,
+            String pathEmpresaId,
             Map<String, String> queryParams,
             Map<String, Object> body) {
 

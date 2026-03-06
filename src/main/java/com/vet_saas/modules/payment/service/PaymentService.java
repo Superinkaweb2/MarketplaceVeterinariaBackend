@@ -17,6 +17,9 @@ import com.vet_saas.modules.sales.event.OrderPaidEvent;
 import com.vet_saas.modules.sales.model.EstadoOrden;
 import com.vet_saas.modules.sales.model.Orden;
 import com.vet_saas.modules.sales.repository.OrdenRepository;
+import com.vet_saas.modules.user.model.Usuario;
+import com.vet_saas.modules.veterinarian.model.Veterinario;
+import com.vet_saas.modules.veterinarian.repository.VeterinarioRepository;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -43,29 +46,51 @@ public class PaymentService {
     private final ApplicationEventPublisher eventPublisher;
     private final CryptoUtil cryptoUtil;
     private final ClienteRepository clienteRepository;
+    private final VeterinarioRepository veterinarioRepository;
     private final com.vet_saas.modules.subscription.service.SubscriptionService subscriptionService;
 
     @Transactional
-    public PaymentPreferenceResponse createCheckoutUrl(Long ordenId) {
+    public PaymentPreferenceResponse createCheckoutUrl(Long ordenId, Usuario usuarioActual) {
         LOGGER.info("Iniciando generación de checkout para ordenId: {}", ordenId);
 
         Orden orden = ordenRepository.findByIdWithDetails(ordenId)
                 .orElseThrow(() -> new BusinessException("Orden no encontrada"));
+
+        if (!orden.getUsuarioCliente().getId().equals(usuarioActual.getId())) {
+            LOGGER.warn("Usuario {} intentó pagar la orden {} que no le pertenece", usuarioActual.getId(), ordenId);
+            throw new ForbiddenException("No tienes permiso para procesar esta orden.");
+        }
 
         if (orden.getEstado() != EstadoOrden.PENDIENTE) {
             LOGGER.warn("Abortando checkout: La orden {} ya está en estado {}", ordenId, orden.getEstado());
             throw new BusinessException("La orden ya fue procesada o no está disponible para pago");
         }
 
-        Empresa empresa = orden.getEmpresa();
+        String accessToken;
+        Long vendorId;
+        String vendorType;
 
-        // Verificación de existencia de Token
-        if (empresa.getMpAccessToken() == null || empresa.getMpAccessToken().isBlank()) {
-            LOGGER.error("La empresa {} no tiene Access Token configurado", empresa.getId());
-            throw new BusinessException("La empresa no tiene configurada su cuenta de MercadoPago.");
+        if (orden.getEmpresa() != null) {
+            Empresa empresa = orden.getEmpresa();
+            if (empresa.getMpAccessToken() == null || empresa.getMpAccessToken().isBlank()) {
+                LOGGER.error("La empresa {} no tiene Access Token configurado", empresa.getId());
+                throw new BusinessException("La empresa no tiene configurada su cuenta de MercadoPago.");
+            }
+            accessToken = cryptoUtil.decrypt(empresa.getMpAccessToken());
+            vendorId = empresa.getId();
+            vendorType = "EMPRESA";
+        } else if (orden.getVeterinario() != null) {
+            Veterinario veterinario = orden.getVeterinario();
+            if (veterinario.getMpAccessToken() == null || veterinario.getMpAccessToken().isBlank()) {
+                LOGGER.error("El veterinario {} no tiene Access Token configurado", veterinario.getId());
+                throw new BusinessException("Este veterinario no tiene configurada su cuenta de MercadoPago.");
+            }
+            accessToken = cryptoUtil.decrypt(veterinario.getMpAccessToken());
+            vendorId = veterinario.getId();
+            vendorType = "VETERINARIO";
+        } else {
+            throw new BusinessException("La orden no tiene un vendedor (Empresa/Veterinario) asociado.");
         }
-
-        String decryptedToken = cryptoUtil.decrypt(empresa.getMpAccessToken());
 
         // Fetch profile to get real names
         com.vet_saas.modules.client.model.PerfilCliente perfil = clienteRepository
@@ -122,14 +147,19 @@ public class PaymentService {
             PreferencePayerRequest payer = payerBuilder.build();
 
             String webhookBase = appProperties.getExternal().getBackendUrl();
-            String notificationUrl = webhookBase + "/api/v1/payments/webhook/" + empresa.getId();
+            String notificationUrl = webhookBase + "/api/v1/payments/webhook/"
+                    + (orden.getEmpresa() != null ? orden.getEmpresa().getId()
+                            : "vet_" + orden.getVeterinario().getId());
 
             PaymentPreferenceResponse response = mpGateway.createPreference(
-                    decryptedToken,
+                    accessToken,
                     orden.getCodigoOrden(),
                     items,
                     payer,
-                    Map.of("orden_id", orden.getId(), "empresa_id", empresa.getId()),
+                    Map.of(
+                            "orden_id", orden.getId(),
+                            "vendor_id", vendorId,
+                            "vendor_type", vendorType),
                     appProperties.getExternal().getFrontendUrl() + "/marketplace/success",
                     notificationUrl);
 
@@ -148,7 +178,7 @@ public class PaymentService {
     }
 
     @Transactional
-    public void processWebhook(String paymentId, Long pathEmpresaId) {
+    public void processWebhook(String paymentId, String pathEmpresaId) {
         LOGGER.info("Webhook recibido. paymentId: {} empresaId: {}", paymentId, pathEmpresaId);
 
         // 1. Idempotencia
@@ -167,9 +197,12 @@ public class PaymentService {
             if (pathEmpresaId == null) {
                 tokenToUse = appProperties.getExternal().getMercadoPago().getAccessToken();
             } else {
-                Empresa empresa = empresaRepository.findById(pathEmpresaId)
-                        .orElseThrow(() -> new BusinessException("Empresa no encontrada"));
-                tokenToUse = cryptoUtil.decrypt(empresa.getMpAccessToken());
+                // El path puede ser un ID numérico (Empresa) o "vet_ID" (Veterinario)
+                // Pero por ahora intentemos buscar por la metadata del pago preferentemente
+                // Si no, necesitamos lógica para parsear el path
+                tokenToUse = appProperties.getExternal().getMercadoPago().getAccessToken(); // Token de plataforma por
+                                                                                            // defecto para consulta
+                                                                                            // inicial
             }
 
             // 2. Consulta a Mercado Pago
@@ -214,25 +247,29 @@ public class PaymentService {
         subscriptionService.processSubscriptionPayment(empresaId, veterinarioId, planId, payment.getId().toString());
     }
 
-    private void handleOrderWebhook(Payment payment, Map<String, Object> metadata, Long pathEmpresaId) {
-        if (metadata.get("empresa_id") == null) {
-            LOGGER.error("El pago {} no contiene metadata de empresa_id", payment.getId());
+    private void handleOrderWebhook(Payment payment, Map<String, Object> metadata, String pathEmpresaId) {
+        if (metadata.get("vendor_id") == null) {
+            LOGGER.error("El pago {} no contiene metadata de vendor_id", payment.getId());
             return;
         }
 
-        Long mpEmpresaId = Double.valueOf(metadata.get("empresa_id").toString()).longValue();
-        if (pathEmpresaId != null && !mpEmpresaId.equals(pathEmpresaId)) {
-            LOGGER.error("MIX DE TENANT DETECTADO. mpEmpresaId ({}) != pathEmpresaId ({})", mpEmpresaId,
-                    pathEmpresaId);
-            throw new ForbiddenException("El pago no pertenece a esta empresa.");
+        Long vendorId = Double.valueOf(metadata.get("vendor_id").toString()).longValue();
+        String vendorType = metadata.get("vendor_type") != null ? metadata.get("vendor_type").toString() : "EMPRESA";
+
+        if (pathEmpresaId != null) {
+            String mpVendorKey = "VETERINARIO".equals(vendorType) ? "vet_" + vendorId : vendorId.toString();
+            if (!mpVendorKey.equals(pathEmpresaId)) {
+                LOGGER.error("MIX DE TENANT DETECTADO. mpVendorKey ({}) != pathEmpresaId ({})", mpVendorKey,
+                        pathEmpresaId);
+                throw new ForbiddenException("El pago no pertenece a este vendedor.");
+            }
         }
 
         // 4. Lock the order row — serializes concurrent webhook processing
         Orden orden = ordenRepository.findByCodigoOrdenForUpdate(payment.getExternalReference())
                 .orElseThrow(() -> new BusinessException("Orden no encontrada: " + payment.getExternalReference()));
 
-        // 5. Re-check idempotency AFTER acquiring lock (the first thread may have
-        // already inserted)
+        // 5. Re-check idempotency AFTER acquiring lock
         if (pagoRepository.existsByMpPaymentId(payment.getId().toString())) {
             LOGGER.info("Webhook duplicado ignorado (post-lock idempotencia). paymentId: {}", payment.getId());
             return;
@@ -255,10 +292,18 @@ public class PaymentService {
             LOGGER.info("Orden {} actualizada al estado {}", orden.getCodigoOrden(), nuevoEstado);
         }
 
-        // 8. Registro de Pago (Evidencia)
-        Empresa empresa = empresaRepository.findById(mpEmpresaId).orElseThrow();
+        // 8. Registro de Pago
+        Empresa empresa = null;
+        Veterinario veterinario = null;
+        if ("EMPRESA".equals(vendorType)) {
+            empresa = empresaRepository.findById(vendorId).orElseThrow();
+        } else {
+            veterinario = veterinarioRepository.findById(vendorId).orElseThrow();
+        }
+
         Pago pagoModel = Pago.builder()
                 .empresa(empresa)
+                .veterinario(veterinario)
                 .orden(orden)
                 .mpPaymentId(payment.getId().toString())
                 .monto(payment.getTransactionAmount())

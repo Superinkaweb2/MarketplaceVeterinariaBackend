@@ -186,6 +186,8 @@ public class ServicioService {
                 servicio.perteneceAVeterinario() ? servicio.getVeterinario().getNombres() : null,
                 servicio.perteneceAVeterinario() ? servicio.getVeterinario().getApellidos() : null,
                 servicio.getImagenUrl(),
+                servicio.perteneceAEmpresa() ? servicio.getEmpresa().getMpPublicKey()
+                        : (servicio.perteneceAVeterinario() ? servicio.getVeterinario().getMpPublicKey() : null),
                 null,
                 null);
     }
