@@ -17,6 +17,7 @@ public class AdminCompanyResponseDto {
     private String nombreComercial;
     private String ruc;
     private String emailContacto;
+    private String tipoServicio;
     private String telefonoContacto;
     private String direccion;
     private String ciudad;

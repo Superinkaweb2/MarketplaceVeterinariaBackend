@@ -9,9 +9,13 @@ import com.vet_saas.modules.adoption.model.EstadoSolicitud;
 import com.vet_saas.modules.adoption.model.SolicitudAdopcion;
 import com.vet_saas.modules.adoption.repository.AdopcionRepository;
 import com.vet_saas.modules.adoption.repository.SolicitudAdopcionRepository;
+import com.vet_saas.modules.company.model.Empresa;
+import com.vet_saas.modules.company.repository.EmpresaRepository;
 import com.vet_saas.modules.pet.model.Mascota;
 import com.vet_saas.modules.pet.repository.MascotaRepository;
 import com.vet_saas.modules.user.model.Usuario;
+import com.vet_saas.modules.veterinarian.model.Veterinario;
+import com.vet_saas.modules.veterinarian.repository.VeterinarioRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -30,6 +34,8 @@ public class AdoptionService {
     private final AdopcionRepository adopcionRepository;
     private final SolicitudAdopcionRepository solicitudRepository;
     private final MascotaRepository mascotaRepository;
+    private final EmpresaRepository empresaRepository;
+    private final VeterinarioRepository veterinarioRepository;
 
     @Transactional
     public AdoptionResponse publishAdoption(Usuario usuario, CreateAdoptionDto dto) {
@@ -194,7 +200,15 @@ public class AdoptionService {
                 adopcion.getEstado(),
                 adopcion.getPublicadoPor().getId(),
                 adopcion.getPublicadoPor().getCorreo(),
+                getTipoServicioPublicador(adopcion.getPublicadoPor().getId()),
                 adopcion.getFechaPublicacion());
+    }
+
+    private String getTipoServicioPublicador(Long usuarioId) {
+        return empresaRepository.findByUsuarioPropietarioId(usuarioId)
+                .map(Empresa::getTipoServicio)
+                .orElseGet(() -> veterinarioRepository.findByUsuarioId(usuarioId)
+                        .map(Veterinario::getEspecialidad).orElse(null));
     }
 
     private ApplicationResponse mapToApplicationResponse(SolicitudAdopcion sol) {

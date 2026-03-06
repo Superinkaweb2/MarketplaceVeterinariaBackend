@@ -207,6 +207,7 @@ public class ProductService {
                 producto.getCategoria() != null ? producto.getCategoria().getNombre() : null,
                 producto.getEmpresa().getId(),
                 producto.getEmpresa().getNombreComercial(),
+                producto.getEmpresa().getTipoServicio(),
                 producto.getEmpresa().getMpPublicKey(),
                 producto.getActivo(),
                 producto.getVisible(),

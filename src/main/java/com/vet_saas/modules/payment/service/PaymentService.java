@@ -197,12 +197,17 @@ public class PaymentService {
             if (pathEmpresaId == null) {
                 tokenToUse = appProperties.getExternal().getMercadoPago().getAccessToken();
             } else {
-                // El path puede ser un ID numérico (Empresa) o "vet_ID" (Veterinario)
-                // Pero por ahora intentemos buscar por la metadata del pago preferentemente
-                // Si no, necesitamos lógica para parsear el path
-                tokenToUse = appProperties.getExternal().getMercadoPago().getAccessToken(); // Token de plataforma por
-                                                                                            // defecto para consulta
-                                                                                            // inicial
+                if (pathEmpresaId.startsWith("vet_")) {
+                    Long vetId = Long.parseLong(pathEmpresaId.substring(4));
+                    Veterinario veterinario = veterinarioRepository.findById(vetId)
+                            .orElseThrow(() -> new BusinessException("Veterinario " + vetId + " no encontrado"));
+                    tokenToUse = cryptoUtil.decrypt(veterinario.getMpAccessToken());
+                } else {
+                    Long empId = Long.parseLong(pathEmpresaId);
+                    Empresa empresa = empresaRepository.findById(empId)
+                            .orElseThrow(() -> new BusinessException("Empresa " + empId + " no encontrada"));
+                    tokenToUse = cryptoUtil.decrypt(empresa.getMpAccessToken());
+                }
             }
 
             // 2. Consulta a Mercado Pago
