@@ -2,20 +2,22 @@ package com.vet_saas.modules.company.dto;
 
 import jakarta.validation.constraints.Email;
 
+import jakarta.validation.constraints.Pattern;
+
 import java.math.BigDecimal;
 
 public record UpdateCompanyDto(
-        String nombreComercial,
-        String descripcion,
-        String tipoServicio,
-        String telefono,
+                String nombreComercial,
+                String descripcion,
+                String tipoServicio,
 
-        @Email(message = "Formato de email inválido")
-        String emailContacto,
+                @Pattern(regexp = "\\d+", message = "El teléfono solo debe contener números") String telefono,
 
-        String direccion,
-        String ciudad,
+                @Email(message = "Formato de email inválido") String emailContacto,
 
-        BigDecimal latitud,
-        BigDecimal longitud
-) {}
+                String direccion,
+                String ciudad,
+
+                BigDecimal latitud,
+                BigDecimal longitud) {
+}
