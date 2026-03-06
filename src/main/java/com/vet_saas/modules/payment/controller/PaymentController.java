@@ -93,4 +93,12 @@ public class PaymentController {
 
         return ResponseEntity.ok().build();
     }
+
+    @GetMapping("/sync")
+    public ResponseEntity<ApiResponse<Void>> syncPayment(
+            @RequestParam("payment_id") String paymentId,
+            @RequestParam("external_reference") String codigoOrden) {
+        paymentService.syncPaymentStatus(paymentId, codigoOrden);
+        return ResponseEntity.ok(ApiResponse.success(null, "Pago sincronizado correctamente"));
+    }
 }

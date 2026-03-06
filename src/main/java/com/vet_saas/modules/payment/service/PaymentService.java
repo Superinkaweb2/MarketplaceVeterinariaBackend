@@ -233,6 +233,18 @@ public class PaymentService {
         }
     }
 
+    @Transactional
+    public void syncPaymentStatus(String paymentId, String codigoOrden) {
+        LOGGER.info("Sincronizando pago manualmente. paymentId: {}, codigoOrden: {}", paymentId, codigoOrden);
+        Orden orden = ordenRepository.findByCodigoOrden(codigoOrden)
+                .orElseThrow(() -> new BusinessException("Orden no encontrada: " + codigoOrden));
+
+        String pathEmpresaId = orden.getEmpresa() != null ? orden.getEmpresa().getId().toString()
+                : "vet_" + orden.getVeterinario().getId();
+
+        processWebhook(paymentId, pathEmpresaId);
+    }
+
     private void handleSubscriptionWebhook(Payment payment, Map<String, Object> metadata) {
         if (!"approved".equals(payment.getStatus())) {
             LOGGER.info("Pago de suscripción {} no aprobado (estado: {})", payment.getId(), payment.getStatus());
