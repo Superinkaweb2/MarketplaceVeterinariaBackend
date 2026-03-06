@@ -5,9 +5,8 @@ import jakarta.validation.constraints.NotNull;
 import java.util.List;
 
 public record CreateOrderDto(
-        @NotNull(message = "Debes indicar a qué empresa le compras")
-        Long empresaId,
+                Long empresaId,
+                Long veterinarioId,
 
-        @NotEmpty(message = "El carrito no puede estar vacío")
-        List<OrderItemDto> items
-) {}
+                @NotEmpty(message = "El carrito no puede estar vacío") List<OrderItemDto> items) {
+}

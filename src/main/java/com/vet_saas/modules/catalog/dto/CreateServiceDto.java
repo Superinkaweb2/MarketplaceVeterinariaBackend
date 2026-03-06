@@ -19,5 +19,6 @@ public record CreateServiceDto(
 
         @NotNull(message = "La modalidad del servicio es obligatoria") ModalidadServicio modalidad,
 
-        @NotNull(message = "Especifique si el servicio es visible") Boolean visible) {
+        @NotNull(message = "Especifique si el servicio es visible") Boolean visible,
+        Boolean activo) {
 }

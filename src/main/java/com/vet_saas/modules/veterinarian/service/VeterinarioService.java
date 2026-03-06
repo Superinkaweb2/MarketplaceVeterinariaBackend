@@ -1,5 +1,6 @@
 package com.vet_saas.modules.veterinarian.service;
 
+import com.vet_saas.core.utils.CryptoUtil;
 import com.vet_saas.core.exceptions.types.BusinessException;
 import com.vet_saas.modules.user.model.Usuario;
 import com.vet_saas.modules.user.repository.UsuarioRepository;
@@ -24,6 +25,7 @@ public class VeterinarioService {
     private final VeterinarioRepository veterinarioRepository;
     private final UsuarioRepository usuarioRepository;
     private final MascotaRepository mascotaRepository;
+    private final CryptoUtil cryptoUtil;
 
     @Transactional
     public VeterinarioResponse createProfile(Long userId, VeterinarioRequest request) {
@@ -47,6 +49,8 @@ public class VeterinarioService {
                 .biografia(request.biografia())
                 .aniosExperiencia(request.aniosExperiencia())
                 .fotoPerfilUrl(request.fotoPerfilUrl())
+                .mpAccessToken(request.mpAccessToken() != null ? cryptoUtil.encrypt(request.mpAccessToken()) : null)
+                .mpPublicKey(request.mpPublicKey())
                 .build();
 
         Veterinario saved = veterinarioRepository.save(veterinario);
@@ -79,6 +83,13 @@ public class VeterinarioService {
             veterinario.setNumeroColegiatura(request.numeroColegiatura());
         }
 
+        if (request.mpAccessToken() != null) {
+            veterinario.setMpAccessToken(cryptoUtil.encrypt(request.mpAccessToken()));
+        }
+        if (request.mpPublicKey() != null) {
+            veterinario.setMpPublicKey(request.mpPublicKey());
+        }
+
         return mapToResponse(veterinarioRepository.save(veterinario));
     }
 
@@ -101,7 +112,7 @@ public class VeterinarioService {
     public List<PetResponse> getPacientesByVeterinarioUsuarioId(Long userId) {
         Veterinario vet = veterinarioRepository.findByUsuarioId(userId)
                 .orElseThrow(() -> new BusinessException("Perfil de veterinario no encontrado"));
-                
+
         return mascotaRepository.findPacientesByVeterinario(vet.getId()).stream()
                 .map(this::mapToPetResponse)
                 .toList();
@@ -134,6 +145,8 @@ public class VeterinarioService {
                 vet.getAniosExperiencia(),
                 vet.getFotoPerfilUrl(),
                 vet.getEstadoValidacion(),
-                vet.getUsuario().getCorreo());
+                vet.getUsuario().getCorreo(),
+                vet.getMpAccessToken() != null ? "CONFIGURADO" : null, // Not sending actual token
+                vet.getMpPublicKey());
     }
 }

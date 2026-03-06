@@ -182,10 +182,13 @@ public class ServicioService {
                 servicio.getVisible(),
                 servicio.perteneceAEmpresa() ? servicio.getEmpresa().getId() : null,
                 servicio.perteneceAEmpresa() ? servicio.getEmpresa().getNombreComercial() : null,
+                servicio.perteneceAEmpresa() ? servicio.getEmpresa().getTipoServicio() : (servicio.perteneceAVeterinario() ? servicio.getVeterinario().getEspecialidad() : null),
                 servicio.perteneceAVeterinario() ? servicio.getVeterinario().getId() : null,
                 servicio.perteneceAVeterinario() ? servicio.getVeterinario().getNombres() : null,
                 servicio.perteneceAVeterinario() ? servicio.getVeterinario().getApellidos() : null,
                 servicio.getImagenUrl(),
+                servicio.perteneceAEmpresa() ? servicio.getEmpresa().getMpPublicKey()
+                        : (servicio.perteneceAVeterinario() ? servicio.getVeterinario().getMpPublicKey() : null),
                 null,
                 null);
     }

@@ -1,6 +1,7 @@
 package com.vet_saas.modules.sales.model;
 
 import com.vet_saas.modules.company.model.Empresa;
+import com.vet_saas.modules.veterinarian.model.Veterinario;
 import com.vet_saas.modules.user.model.Usuario;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
@@ -37,8 +38,12 @@ public class Orden {
     private Usuario usuarioCliente;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "empresa_id", nullable = false)
+    @JoinColumn(name = "empresa_id")
     private Empresa empresa;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "veterinario_id")
+    private Veterinario veterinario;
 
     @Column(nullable = false, precision = 10, scale = 2)
     private BigDecimal subtotal;
@@ -82,5 +87,10 @@ public class Orden {
             costoEnvio = BigDecimal.ZERO;
         if (comisionPlataforma == null)
             comisionPlataforma = BigDecimal.ZERO;
+
+        // Validar que tenga al menos un vendor
+        if (empresa == null && veterinario == null) {
+            throw new IllegalStateException("La orden debe tener una Empresa o un Veterinario asociado");
+        }
     }
 }

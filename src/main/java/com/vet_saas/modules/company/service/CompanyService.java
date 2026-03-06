@@ -34,8 +34,12 @@ public class CompanyService {
             throw new BusinessException("Este usuario ya tiene una empresa registrada");
         }
 
-        if (empresaRepository.existsByRuc(dto.ruc())) {
+        if (dto.ruc() != null && empresaRepository.existsByRuc(dto.ruc())) {
             throw new BusinessException("El RUC ya está registrado");
+        }
+
+        if ("OTRO".equalsIgnoreCase(dto.tipoServicio())) {
+            throw new BusinessException("Debe especificar el tipo de servicio");
         }
 
         Empresa empresa = Empresa.builder()
@@ -74,8 +78,12 @@ public class CompanyService {
             empresa.setNombreComercial(dto.nombreComercial());
         if (dto.descripcion() != null)
             empresa.setDescripcion(dto.descripcion());
-        if (dto.tipoServicio() != null)
+        if (dto.tipoServicio() != null) {
+            if ("OTRO".equalsIgnoreCase(dto.tipoServicio())) {
+                throw new BusinessException("Debe especificar el tipo de servicio");
+            }
             empresa.setTipoServicio(dto.tipoServicio());
+        }
         if (dto.telefono() != null)
             empresa.setTelefonoContacto(dto.telefono());
         if (dto.emailContacto() != null)

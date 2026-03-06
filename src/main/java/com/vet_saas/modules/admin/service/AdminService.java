@@ -110,6 +110,7 @@ public class AdminService {
                 .nombreComercial(e.getNombreComercial())
                 .ruc(e.getRuc())
                 .emailContacto(e.getEmailContacto())
+                .tipoServicio(e.getTipoServicio())
                 .telefonoContacto(e.getTelefonoContacto())
                 .direccion(e.getDireccion())
                 .ciudad(e.getCiudad())

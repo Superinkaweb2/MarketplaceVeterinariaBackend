@@ -15,10 +15,12 @@ public record ServiceResponse(
                 Boolean visible,
                 Long empresaId,
                 String empresaNombre,
+                String empresaTipoServicio,
                 Long veterinarioId,
                 String veterinarioNombres,
                 String veterinarioApellidos,
                 String imagenUrl,
+                String mpPublicKey,
                 LocalDateTime createdAt,
                 LocalDateTime updatedAt) {
 }

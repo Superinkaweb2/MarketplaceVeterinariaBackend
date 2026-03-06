@@ -47,6 +47,12 @@ public class Veterinario {
     @Column(name = "foto_perfil_url")
     private String fotoPerfilUrl;
 
+    @Column(name = "mp_access_token")
+    private String mpAccessToken;
+
+    @Column(name = "mp_public_key")
+    private String mpPublicKey;
+
     @Enumerated(EnumType.STRING)
     @JdbcTypeCode(SqlTypes.NAMED_ENUM)
     @Column(name = "estado_validacion")
