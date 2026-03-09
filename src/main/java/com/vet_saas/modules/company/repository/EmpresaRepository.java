@@ -14,4 +14,8 @@ public interface EmpresaRepository extends JpaRepository<Empresa, Long> {
     boolean existsByUsuarioPropietarioId(Long usuarioId);
 
     Optional<Empresa> findByUsuarioPropietarioId(Long usuarioId);
+
+    org.springframework.data.domain.Page<Empresa> findByEstadoValidacion(
+            com.vet_saas.modules.veterinarian.model.VerificationStatus estadoValidacion,
+            org.springframework.data.domain.Pageable pageable);
 }

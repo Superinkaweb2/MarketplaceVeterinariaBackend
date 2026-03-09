@@ -2,6 +2,7 @@ package com.vet_saas.modules.company.service;
 
 import com.vet_saas.config.AppProperties;
 import com.vet_saas.core.exceptions.types.BusinessException;
+import com.vet_saas.core.exceptions.types.ResourceNotFoundException;
 import com.vet_saas.modules.company.dto.CompanyResponse;
 import com.vet_saas.modules.company.dto.CreateCompanyDto;
 import com.vet_saas.modules.company.dto.UpdateCompanyDto;
@@ -116,6 +117,21 @@ public class CompanyService {
                         "No se ha encontrado un perfil de empresa asociado a este usuario."));
 
         return mapToResponse(empresa);
+    }
+
+    @Transactional(readOnly = true)
+    public CompanyResponse getPublicProfile(Long id) {
+        Empresa empresa = empresaRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Empresa", "id", id));
+
+        return mapToResponse(empresa);
+    }
+
+    @Transactional(readOnly = true)
+    public org.springframework.data.domain.Page<CompanyResponse> getAllPublicCompanies(
+            org.springframework.data.domain.Pageable pageable) {
+        return empresaRepository.findByEstadoValidacion(VerificationStatus.VERIFICADO, pageable)
+                .map(this::mapToResponse);
     }
 
     @Transactional
