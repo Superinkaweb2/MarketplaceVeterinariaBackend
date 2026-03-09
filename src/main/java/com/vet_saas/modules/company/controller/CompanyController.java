@@ -80,6 +80,23 @@ public class CompanyController {
                                                 "Perfil de empresa recuperado exitosamente"));
         }
 
+        @GetMapping("/public")
+        public ResponseEntity<ApiResponse<org.springframework.data.domain.Page<CompanyResponse>>> getAllPublicCompanies(
+                        org.springframework.data.domain.Pageable pageable) {
+                return ResponseEntity.ok(
+                                ApiResponse.success(
+                                                companyService.getAllPublicCompanies(pageable),
+                                                "Empresas públicas recuperadas exitosamente"));
+        }
+
+        @GetMapping("/public/{id}")
+        public ResponseEntity<ApiResponse<CompanyResponse>> getPublicCompany(@PathVariable Long id) {
+                return ResponseEntity.ok(
+                                ApiResponse.success(
+                                                companyService.getPublicProfile(id),
+                                                "Perfil público de empresa recuperado exitosamente"));
+        }
+
         @GetMapping("/me/patients")
         @PreAuthorize("hasRole('EMPRESA')")
         public ResponseEntity<ApiResponse<java.util.List<PetResponse>>> getMyPatients(

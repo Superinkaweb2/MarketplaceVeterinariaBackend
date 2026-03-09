@@ -45,6 +45,16 @@ public class AdoptionController {
                                                 "Adopciones recuperadas"));
         }
 
+        @GetMapping("/public/company/{companyId}")
+        public ResponseEntity<ApiResponse<Page<AdoptionResponse>>> getPublicAdoptionsByCompany(
+                        @PathVariable Long companyId,
+                        Pageable pageable) {
+                return ResponseEntity.ok(
+                                ApiResponse.success(
+                                                adoptionService.getPublicAdoptionsByCompany(companyId, pageable),
+                                                "Adopciones de la empresa recuperadas"));
+        }
+
         @GetMapping("/{id}")
         public ResponseEntity<ApiResponse<AdoptionResponse>> getAdoptionById(
                         @PathVariable Long id) {

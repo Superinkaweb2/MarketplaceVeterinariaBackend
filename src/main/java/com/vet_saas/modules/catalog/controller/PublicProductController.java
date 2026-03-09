@@ -38,4 +38,18 @@ public class PublicProductController {
         ProductResponse response = productService.getProductById(id);
         return ResponseEntity.ok(ApiResponse.success(response, "Producto encontrado"));
     }
+
+    @GetMapping("/company/{companyId}")
+    public ResponseEntity<ApiResponse<Page<ProductResponse>>> getProductsByCompany(
+            @PathVariable Long companyId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(defaultValue = "desc") String sort) {
+
+        Sort.Direction direction = sort.equalsIgnoreCase("asc") ? Sort.Direction.ASC : Sort.Direction.DESC;
+        Pageable pageable = PageRequest.of(page, size, Sort.by(direction, "createdAt"));
+
+        Page<ProductResponse> result = productService.getPublicProductsByCompany(companyId, pageable);
+        return ResponseEntity.ok(ApiResponse.success(result, "Productos de la empresa recuperados"));
+    }
 }

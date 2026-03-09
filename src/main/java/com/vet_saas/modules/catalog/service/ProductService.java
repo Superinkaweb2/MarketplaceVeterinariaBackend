@@ -155,6 +155,13 @@ public class ProductService {
     }
 
     @Transactional(readOnly = true)
+    public Page<ProductResponse> getPublicProductsByCompany(Long companyId, Pageable pageable) {
+        return productoRepository.findByEmpresaIdAndEstadoAndVisibleTrueAndActivoTrue(companyId, EstadoProducto.ACTIVO,
+                pageable)
+                .map(this::mapToResponse);
+    }
+
+    @Transactional(readOnly = true)
     public ProductResponse getProductById(Long id) {
         return productoRepository.findByIdAndEstadoAndVisibleTrueAndActivoTrue(id, EstadoProducto.ACTIVO)
                 .map(this::mapToResponse)

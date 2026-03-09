@@ -46,4 +46,10 @@ public interface ProductoRepository extends JpaRepository<Producto, Long> {
                         @Param("categoriaId") Long categoriaId,
                         Pageable pageable);
 
+        // Nuevo método dedicado para perfiles públicos de empresa
+        Page<Producto> findByEmpresaIdAndEstadoAndVisibleTrueAndActivoTrue(
+                        Long empresaId,
+                        EstadoProducto estado,
+                        Pageable pageable);
+
 }

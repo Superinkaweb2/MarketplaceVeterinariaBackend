@@ -19,4 +19,7 @@ public interface AdopcionRepository extends JpaRepository<Adopcion, Long> {
     boolean existsByMascotaIdAndEstadoInAndActivoTrue(Long mascotaId, java.util.List<EstadoAdopcion> estados);
 
     java.util.List<Adopcion> findByPublicadoPorIdAndActivoTrue(Long usuarioId);
+
+    // Nuevo método dedicado para perfiles públicos de empresa
+    Page<Adopcion> findByPublicadoPorIdAndEstadoAndActivoTrue(Long usuarioId, EstadoAdopcion estado, Pageable pageable);
 }

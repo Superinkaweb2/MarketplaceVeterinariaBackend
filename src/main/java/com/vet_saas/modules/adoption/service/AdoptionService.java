@@ -73,6 +73,18 @@ public class AdoptionService {
     }
 
     @Transactional(readOnly = true)
+    public Page<AdoptionResponse> getPublicAdoptionsByCompany(Long companyId, Pageable pageable) {
+        Empresa empresa = empresaRepository.findById(companyId)
+                .orElseThrow(() -> new ResourceNotFoundException("Empresa", "id", companyId));
+
+        return adopcionRepository.findByPublicadoPorIdAndEstadoAndActivoTrue(
+                empresa.getUsuarioPropietario().getId(),
+                EstadoAdopcion.DISPONIBLE,
+                pageable)
+                .map(this::mapToAdoptionResponse);
+    }
+
+    @Transactional(readOnly = true)
     public AdoptionResponse getAdoptionById(Long id) {
         return adopcionRepository.findByIdAndActivoTrue(id)
                 .map(this::mapToAdoptionResponse)
