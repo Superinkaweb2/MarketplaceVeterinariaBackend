@@ -4,5 +4,6 @@ public enum Role {
     CLIENTE,
     EMPRESA,
     VETERINARIO,
-    ADMIN
+    ADMIN,
+    REPARTIDOR
 }
