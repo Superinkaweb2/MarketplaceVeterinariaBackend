@@ -15,12 +15,17 @@ public class DeliveryResponseDTO {
     private Long ordenId;
     private DeliveryStatus estado;
 
+    // Datos del Cliente
+    private String clienteNombre;
+    private String clienteTelefono;
+
     // Repartidor (null si aún no asignado)
     private Long repartidorId;
     private String repartidorNombre;
     private String repartidorFoto;
     private String repartidorTelefono;
     private String repartidorVehiculo;
+    private BigDecimal repartidorCalificacionPromedio;
 
     // Ubicacion actual del repartidor (puede ser null)
     private BigDecimal repartidorLat;
@@ -45,6 +50,12 @@ public class DeliveryResponseDTO {
     // Solo se envía al cliente una vez (al crear el delivery)
     // En requests GET normales viene null por seguridad
     private String otpCliente;
+
+    // Calificaciones (vienen del cliente)
+    private Short calificacionRepartidor;
+    private String comentarioRepartidor;
+    private Short calificacionProducto;
+    private String comentarioProducto;
 
     // Foto de entrega (disponible tras ENTREGADO)
     private String fotoEntregaUrl;

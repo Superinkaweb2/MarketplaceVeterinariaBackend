@@ -123,4 +123,12 @@ public class DeliveryController {
     public ResponseEntity<DeliveryResponseDTO> getById(@PathVariable Long deliveryId) {
         return ResponseEntity.ok(deliveryService.getById(deliveryId));
     }
+
+    /** Ver calificaciones recibidas por la empresa */
+    @GetMapping("/empresa/ratings")
+    @PreAuthorize("hasRole('EMPRESA')")
+    public ResponseEntity<java.util.List<DeliveryResponseDTO>> getRatingsByEmpresa(
+            @AuthenticationPrincipal Usuario principal) {
+        return ResponseEntity.ok(deliveryService.getRatingsByUsuarioEmpresa(principal.getId()));
+    }
 }

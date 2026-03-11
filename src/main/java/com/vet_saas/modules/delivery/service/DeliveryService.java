@@ -3,6 +3,8 @@ package com.vet_saas.modules.delivery.service;
 import com.vet_saas.core.exceptions.types.BusinessException;
 import com.vet_saas.core.exceptions.types.ResourceNotFoundException;
 import com.vet_saas.core.service.StorageService;
+import com.vet_saas.modules.company.model.Empresa;
+import com.vet_saas.modules.company.repository.EmpresaRepository;
 import com.vet_saas.modules.delivery.dto.request.CalificacionDTO;
 import com.vet_saas.modules.delivery.dto.request.ConfirmarOTPDTO;
 import com.vet_saas.modules.delivery.dto.request.CrearDeliveryDTO;
@@ -46,6 +48,7 @@ public class DeliveryService {
     private final SimpMessagingTemplate wsTemplate;
     private final PasswordEncoder passwordEncoder;
     private final DeliveryMapper deliveryMapper;
+    private final EmpresaRepository empresaRepository;
     private final EmailService emailService;
 
     private static final int OTP_EXPIRACION_HORAS = 4;
@@ -342,16 +345,29 @@ public class DeliveryService {
             throw new BusinessException("No autorizado para calificar este delivery");
         }
 
-        if (delivery.getCalificacionCliente() != null) {
+        if (delivery.getCalificacionRepartidor() != null) {
             throw new BusinessException("Ya calificaste esta entrega");
         }
 
-        delivery.setCalificacionCliente(dto.getCalificacion());  // Short
-        delivery.setComentarioCliente(dto.getComentario());
+        delivery.setCalificacionRepartidor(dto.getCalificacionRepartidor());
+        delivery.setComentarioCliente(dto.getComentarioRepartidor());
+        delivery.setCalificacionProducto(dto.getCalificacionProducto());
+        delivery.setComentarioProducto(dto.getComentarioProducto());
         deliveryRepository.save(delivery);
 
         // Recalcular promedio del repartidor
         recalcularCalificacionRepartidor(delivery.getRepartidor().getIdRepartidor());
+    }
+
+    @Transactional(readOnly = true)
+    public List<DeliveryResponseDTO> getRatingsByUsuarioEmpresa(Long usuarioId) {
+        Empresa empresa = empresaRepository.findByUsuarioPropietarioId(usuarioId)
+            .orElseThrow(() -> new BusinessException("No se encontró una empresa vinculada a este usuario"));
+            
+        return deliveryRepository.findRatingsByEmpresa(empresa.getId())
+            .stream()
+            .map(deliveryMapper::toResponseDTO)
+            .collect(Collectors.toList());
     }
 
     // =========================================================
@@ -390,8 +406,8 @@ public class DeliveryService {
         Double promedio = deliveryRepository
             .findByRepartidorIdRepartidorOrderByCreatedAtDesc(repartidorId)
             .stream()
-            .filter(d -> d.getCalificacionCliente() != null)
-            .mapToInt(d -> d.getCalificacionCliente().intValue()) // Short → int
+            .filter(d -> d.getCalificacionRepartidor() != null)
+            .mapToInt(d -> d.getCalificacionRepartidor().intValue())
             .average()
             .orElse(5.0);
 

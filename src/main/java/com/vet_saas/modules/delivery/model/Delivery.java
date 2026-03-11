@@ -108,8 +108,14 @@ public class Delivery {
     @Column(name = "calificacion_repartidor", columnDefinition = "SMALLINT")
     private Short calificacionRepartidor;
 
+    @Column(name = "calificacion_producto", columnDefinition = "SMALLINT")
+    private Short calificacionProducto;
+
     @Column(name = "comentario_cliente")
     private String comentarioCliente;
+
+    @Column(name = "comentario_producto")
+    private String comentarioProducto;
 
     @Column(name = "intentos_asignacion")
     @Builder.Default

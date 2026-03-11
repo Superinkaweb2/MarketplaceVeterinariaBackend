@@ -60,4 +60,13 @@ public interface DeliveryRepository extends JpaRepository<Delivery, Long> {
         @Param("repartidorId") Long repartidorId, 
         @Param("estados") List<DeliveryStatus> estados
     );
+
+    @Query("""
+    SELECT d FROM Delivery d
+    JOIN d.orden o
+    WHERE o.empresa.id = :empresaId
+      AND d.calificacionProducto IS NOT NULL
+    ORDER BY d.entregadoAt DESC
+    """)
+    List<Delivery> findRatingsByEmpresa(@Param("empresaId") Long empresaId);
 }
