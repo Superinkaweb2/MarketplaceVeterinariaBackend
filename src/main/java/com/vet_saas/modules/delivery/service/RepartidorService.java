@@ -2,6 +2,7 @@ package com.vet_saas.modules.delivery.service;
 
 import com.vet_saas.core.exceptions.types.BusinessException;
 import com.vet_saas.core.exceptions.types.ResourceNotFoundException;
+import com.vet_saas.modules.delivery.dto.request.RepartidorRequestDTO;
 import com.vet_saas.modules.delivery.dto.request.UbicacionDTO;
 import com.vet_saas.modules.delivery.dto.response.DeliveryResponseDTO;
 import com.vet_saas.modules.delivery.dto.response.RepartidorResponseDTO;
@@ -9,14 +10,17 @@ import com.vet_saas.modules.delivery.mapper.DeliveryMapper;
 import com.vet_saas.modules.delivery.model.DeliveryStatus;
 import com.vet_saas.modules.delivery.model.Repartidor;
 import com.vet_saas.modules.delivery.model.RepartidorStatus;
-import com.vet_saas.modules.delivery.repository.DeliveryRepository;
 import com.vet_saas.modules.delivery.repository.RepartidorRepository;
+import com.vet_saas.modules.delivery.repository.DeliveryRepository;
+import com.vet_saas.modules.user.model.Usuario;
+import com.vet_saas.modules.user.repository.UsuarioRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Optional;
 
 @Service
 @Slf4j
@@ -27,6 +31,47 @@ public class RepartidorService {
     private final RepartidorRepository repartidorRepository;
     private final DeliveryRepository deliveryRepository;
     private final DeliveryMapper deliveryMapper;
+    private final UsuarioRepository usuarioRepository;
+
+    public RepartidorResponseDTO createProfile(Long usuarioId, RepartidorRequestDTO dto, String fotoUrl) {
+        Optional<Repartidor> existing = repartidorRepository.findByUsuarioId(usuarioId);
+        if (existing.isPresent()) {
+            log.info("Perfil de repartidor ya existe para usuarioId {}, procediendo a actualizar en lugar de crear", usuarioId);
+            return updateProfile(usuarioId, dto, fotoUrl);
+        }
+
+        Usuario usuario = usuarioRepository.findById(usuarioId)
+                .orElseThrow(() -> new ResourceNotFoundException("Usuario no encontrado"));
+
+        Repartidor repartidor = Repartidor.builder()
+                .usuario(usuario)
+                .nombres(dto.getNombres())
+                .apellidos(dto.getApellidos())
+                .telefono(dto.getTelefono())
+                .tipoVehiculo(dto.getTipoVehiculo())
+                .placaVehiculo(dto.getPlacaVehiculo())
+                .fotoPerfil(fotoUrl)
+                .build();
+
+        return toDTO(repartidorRepository.save(repartidor));
+    }
+
+    public RepartidorResponseDTO updateProfile(Long usuarioId, RepartidorRequestDTO dto, String fotoUrl) {
+        Repartidor repartidor = repartidorRepository.findByUsuarioId(usuarioId)
+                .orElseThrow(() -> new ResourceNotFoundException("Perfil de repartidor no encontrado"));
+
+        repartidor.setNombres(dto.getNombres());
+        repartidor.setApellidos(dto.getApellidos());
+        repartidor.setTelefono(dto.getTelefono());
+        repartidor.setTipoVehiculo(dto.getTipoVehiculo());
+        repartidor.setPlacaVehiculo(dto.getPlacaVehiculo());
+        
+        if (fotoUrl != null) {
+            repartidor.setFotoPerfil(fotoUrl);
+        }
+
+        return toDTO(repartidorRepository.save(repartidor));
+    }
 
     @Transactional(readOnly = true)
     public RepartidorResponseDTO getByUsuarioId(Long usuarioId) {
