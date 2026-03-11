@@ -223,6 +223,49 @@ public class DeliveryService {
         return deliveryMapper.toResponseDTO(delivery);
     }
 
+    /**
+     * Cancelar delivery por parte del cliente.
+     * Solo es posible si no ha sido recogido por el repartidor.
+     */
+    @Transactional
+    public DeliveryResponseDTO cancelarDelivery(Long deliveryId, Long usuarioId) {
+        Delivery delivery = deliveryRepository.findById(deliveryId)
+            .orElseThrow(() -> new ResourceNotFoundException("Delivery no encontrado: " + deliveryId));
+
+        // Validar que el usuario sea el dueño de la orden
+        if (!delivery.getOrden().getUsuarioCliente().getId().equals(usuarioId)) {
+            throw new BusinessException("No autorizado para cancelar este delivery");
+        }
+
+        // Validar estado: No se puede cancelar si ya fue recogido o está en estados finales
+        if (delivery.getEstado() == DeliveryStatus.RECOGIDO || 
+            delivery.getEstado() == DeliveryStatus.EN_CAMINO || 
+            delivery.getEstado() == DeliveryStatus.CERCA) {
+            throw new BusinessException("No se puede cancelar el envío porque el pedido ya está en manos del repartidor.");
+        }
+
+        if (delivery.getEstado().esFinal()) {
+            throw new BusinessException("El delivery ya ha finalizado.");
+        }
+
+        delivery.setEstado(DeliveryStatus.CANCELADO);
+        deliveryRepository.save(delivery);
+        registrarEstado(delivery, DeliveryStatus.CANCELADO, "Venta cancelada por el cliente", usuarioId);
+
+        // Liberar al repartidor si estaba asignado
+        if (delivery.getRepartidor() != null) {
+            repartidorRepository.actualizarEstado(
+                delivery.getRepartidor().getIdRepartidor(),
+                RepartidorStatus.DISPONIBLE
+            );
+        }
+
+        // Notificar cambio via WebSocket
+        wsTemplate.convertAndSend("/topic/delivery/" + deliveryId + "/estado", "CANCELADO");
+
+        return deliveryMapper.toResponseDTO(delivery);
+    }
+
     // =========================================================
     // CONFIRMACION POR OTP
     // =========================================================

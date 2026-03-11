@@ -42,6 +42,15 @@ public class DeliveryController {
         return ResponseEntity.ok().build();
     }
 
+    /** El cliente cancela su pedido (solo si no ha sido recogido) */
+    @PostMapping("/{deliveryId}/cancelar")
+    @PreAuthorize("hasRole('CLIENTE')")
+    public ResponseEntity<DeliveryResponseDTO> cancelar(
+            @PathVariable Long deliveryId,
+            @AuthenticationPrincipal Usuario principal) {
+        return ResponseEntity.ok(deliveryService.cancelarDelivery(deliveryId, principal.getId()));
+    }
+
     // ---- Repartidor ----
 
     /** El repartidor cambia el estado del delivery (EN_TIENDA, RECOGIDO, EN_CAMINO, etc.) */
