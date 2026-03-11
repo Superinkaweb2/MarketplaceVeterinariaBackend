@@ -5,6 +5,8 @@ import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -42,6 +44,7 @@ public class Repartidor {
     private String fotoPerfil;
 
     @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.NAMED_ENUM)
     @Column(name = "tipo_vehiculo", columnDefinition = "vehicle_type")
     @Builder.Default
     private VehicleType tipoVehiculo = VehicleType.MOTO;
@@ -50,11 +53,13 @@ public class Repartidor {
     private String placaVehiculo;
 
     @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.NAMED_ENUM)
     @Column(name = "estado_validacion", columnDefinition = "verification_status")
     @Builder.Default
     private VerificationStatus estadoValidacion = VerificationStatus.PENDIENTE;
 
     @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.NAMED_ENUM)
     @Column(name = "estado_actual", columnDefinition = "repartidor_status")
     @Builder.Default
     private RepartidorStatus estadoActual = RepartidorStatus.OFFLINE;

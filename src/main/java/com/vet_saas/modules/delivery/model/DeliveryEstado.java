@@ -3,6 +3,8 @@ package com.vet_saas.modules.delivery.model;
 import com.vet_saas.modules.user.model.Usuario;
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.time.Instant;
 
@@ -23,6 +25,7 @@ public class DeliveryEstado {
     private Delivery delivery;
 
     @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.NAMED_ENUM)
     @Column(nullable = false, columnDefinition = "delivery_status")
     private DeliveryStatus estado;
 

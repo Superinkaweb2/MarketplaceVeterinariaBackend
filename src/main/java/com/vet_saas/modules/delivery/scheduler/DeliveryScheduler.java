@@ -47,9 +47,9 @@ public class DeliveryScheduler {
         for (Delivery delivery : pendientes) {
             if (delivery.getIntentosAsignacion() >= MAX_INTENTOS) {
                 log.warn("Delivery {} marcado como FALLIDO tras {} intentos",
-                    delivery.getIdDelivery(), MAX_INTENTOS);
+                    delivery.getId(), MAX_INTENTOS);
                 deliveryService.cambiarEstado(
-                    delivery.getIdDelivery(),
+                    delivery.getId(),
                     DeliveryStatus.FALLIDO,
                     null,
                     "Sin repartidores disponibles tras " + MAX_INTENTOS + " intentos"
@@ -57,7 +57,7 @@ public class DeliveryScheduler {
             } else {
                 boolean asignado = asignacionService.intentarAsignar(delivery);
                 log.info("Delivery {}: intento {} → {}",
-                    delivery.getIdDelivery(),
+                    delivery.getId(),
                     delivery.getIntentosAsignacion(),
                     asignado ? "ASIGNADO" : "sin candidatos");
             }

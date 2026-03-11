@@ -9,25 +9,27 @@ import com.vet_saas.modules.delivery.dto.request.CrearDeliveryDTO;
 import com.vet_saas.modules.delivery.dto.response.DeliveryResponseDTO;
 import com.vet_saas.modules.delivery.dto.response.EstadoDeliveryEvent;
 import com.vet_saas.modules.delivery.mapper.DeliveryMapper;
-import com.vet_saas.modules.delivery.model.Delivery;
-import com.vet_saas.modules.delivery.model.DeliveryEstado;
-import com.vet_saas.modules.delivery.model.DeliveryStatus;
-import com.vet_saas.modules.delivery.model.RepartidorStatus;
+import com.vet_saas.modules.delivery.model.*;
 import com.vet_saas.modules.delivery.repository.DeliveryEstadoRepository;
 import com.vet_saas.modules.delivery.repository.DeliveryRepository;
 import com.vet_saas.modules.delivery.repository.RepartidorRepository;
+import com.vet_saas.modules.notification.service.EmailService;
 import com.vet_saas.modules.sales.model.Orden;
+import com.vet_saas.modules.user.repository.UsuarioRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.security.SecureRandom;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.List;
+import java.util.stream.Collectors;
 
 @Service
 @Slf4j
@@ -38,11 +40,13 @@ public class DeliveryService {
     private final DeliveryRepository deliveryRepository;
     private final DeliveryEstadoRepository estadoRepository;
     private final RepartidorRepository repartidorRepository;
+    private final UsuarioRepository usuarioRepository;
     private final AsignacionService asignacionService;
     private final StorageService cloudinaryService;
     private final SimpMessagingTemplate wsTemplate;
     private final PasswordEncoder passwordEncoder;
     private final DeliveryMapper deliveryMapper;
+    private final EmailService emailService;
 
     private static final int OTP_EXPIRACION_HORAS = 4;
     private static final String CLOUDINARY_FOLDER_DELIVERY = "deliveries/confirmaciones";
@@ -50,10 +54,23 @@ public class DeliveryService {
     // =========================================================
     // CREAR DELIVERY (llamado desde OrdenService al crear orden)
     // =========================================================
+    /**
+     * Crear el delivery. Se usa REQUIRES_NEW para asegurar que el flush
+     * y el commit ocurran independientemente del listener principal.
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public DeliveryResponseDTO crearDelivery(Orden orden, CrearDeliveryDTO dto) {
         if (deliveryRepository.existsByOrdenId(orden.getId())) {
-            throw new BusinessException("Ya existe un delivery para esta orden");
+            log.warn("Delivery ya existe para la orden {}", orden.getId());
+            return null;
         }
+
+        // Calcular distancia y tiempo estimado
+        double distanciaKm = calcularDistanciaHaversine(
+            dto.getOrigenLat().doubleValue(), dto.getOrigenLng().doubleValue(),
+            dto.getDestinoLat().doubleValue(), dto.getDestinoLng().doubleValue()
+        );
+        int tiempoEstimadoMin = Math.max(10, (int) Math.ceil(distanciaKm / 0.5)); // ~30 km/h promedio en moto urbana
 
         Delivery delivery = Delivery.builder()
             .orden(orden)
@@ -65,22 +82,74 @@ public class DeliveryService {
             .destinoDireccion(dto.getDestinoDireccion())
             .destinoReferencia(dto.getDestinoReferencia())
             .costoDelivery(dto.getCostoDelivery())
+            .distanciaKm(new java.math.BigDecimal(String.format("%.2f", distanciaKm)))
+            .tiempoEstimadoMin(tiempoEstimadoMin)
             .estado(DeliveryStatus.BUSCANDO_REPARTIDOR)
             .intentosAsignacion(0)
             .build();
 
-        delivery = deliveryRepository.save(delivery);
-        registrarEstado(delivery, DeliveryStatus.BUSCANDO_REPARTIDOR, "Delivery creado", null);
+        delivery = deliveryRepository.saveAndFlush(delivery);
+        registrarEstado(delivery, DeliveryStatus.BUSCANDO_REPARTIDOR, "Delivery creado por pago de orden", null);
 
-        // Generar OTP y guardarlo hasheado
         String otpPlano = generarYGuardarOTP(delivery);
 
-        // Intentar asignar repartidor inmediatamente
-        asignacionService.intentarAsignar(delivery);
+        // Enviar código OTP al cliente por email
+        try {
+            emailService.sendDeliveryOtpEmail(orden.getId(), otpPlano);
+        } catch (Exception e) {
+            log.warn("No se pudo enviar OTP al cliente de la orden {}: {}", orden.getCodigoOrden(), e.getMessage());
+        }
 
-        // Recargar para tener datos actualizados
-        delivery = deliveryRepository.findById(delivery.getIdDelivery()).orElseThrow();
+        // Notificar al pool de repartidores
+        wsTemplate.convertAndSend("/topic/pedidos-disponibles", deliveryMapper.toResponseDTO(delivery));
+
+        // Retornar con OTP incluido (solo esta vez)
         return deliveryMapper.toResponseDTOConOTP(delivery, otpPlano);
+    }
+
+    @Transactional(readOnly = true)
+    public List<DeliveryResponseDTO> getPedidosDisponibles() {
+        return deliveryRepository.findByEstado(DeliveryStatus.BUSCANDO_REPARTIDOR)
+            .stream()
+            .map(deliveryMapper::toResponseDTO)
+            .collect(Collectors.toList());
+    }
+
+    public DeliveryResponseDTO aceptarPedido(Long deliveryId, Long usuarioId) {
+        Delivery delivery = deliveryRepository.findById(deliveryId)
+            .orElseThrow(() -> new ResourceNotFoundException("Delivery no encontrado"));
+
+        if (delivery.getEstado() != DeliveryStatus.BUSCANDO_REPARTIDOR) {
+            throw new BusinessException("El pedido ya no está disponible para asignación");
+        }
+
+        Repartidor repartidor = repartidorRepository.findByUsuarioId(usuarioId)
+            .orElseThrow(() -> new ResourceNotFoundException("No eres un repartidor registrado"));
+
+        // Verificar que no tenga otro delivery activo
+        boolean tieneActivo = deliveryRepository.existsByRepartidorIdAndEstadoNotIn(
+            repartidor.getIdRepartidor(), 
+            List.of(DeliveryStatus.ENTREGADO, DeliveryStatus.FALLIDO, DeliveryStatus.CANCELADO)
+        );
+        if (tieneActivo) {
+            throw new BusinessException("Ya tienes un delivery en curso. Termínalo antes de tomar otro.");
+        }
+
+        delivery.setRepartidor(repartidor);
+        delivery.setEstado(DeliveryStatus.REPARTIDOR_ASIGNADO);
+        delivery.setAsignadoAt(Instant.now());
+        deliveryRepository.save(delivery);
+
+        repartidor.setEstadoActual(RepartidorStatus.OCUPADO);
+        repartidorRepository.save(repartidor);
+
+        registrarEstado(delivery, DeliveryStatus.REPARTIDOR_ASIGNADO, "Pedido aceptado por el repartidor", usuarioId);
+
+        // Notificar al cliente y actualizar el pool
+        wsTemplate.convertAndSend("/topic/delivery/" + deliveryId + "/estado", "REPARTIDOR_ASIGNADO");
+        wsTemplate.convertAndSend("/topic/pedidos-pool-update", deliveryId);
+
+        return deliveryMapper.toResponseDTO(delivery);
     }
 
     // =========================================================
@@ -287,5 +356,19 @@ public class DeliveryService {
             r.setCalificacionPromedio(new java.math.BigDecimal(String.format("%.2f", promedio)));
             repartidorRepository.save(r);
         });
+    }
+
+    /**
+     * Calcula la distancia en kilómetros entre dos puntos usando la fórmula de Haversine.
+     */
+    private double calcularDistanciaHaversine(double lat1, double lng1, double lat2, double lng2) {
+        final double R = 6371.0; // Radio de la Tierra en km
+        double dLat = Math.toRadians(lat2 - lat1);
+        double dLng = Math.toRadians(lng2 - lng1);
+        double a = Math.sin(dLat / 2) * Math.sin(dLat / 2)
+                 + Math.cos(Math.toRadians(lat1)) * Math.cos(Math.toRadians(lat2))
+                 * Math.sin(dLng / 2) * Math.sin(dLng / 2);
+        double c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        return R * c;
     }
 }

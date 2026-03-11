@@ -5,6 +5,7 @@ import com.vet_saas.modules.delivery.model.DeliveryStatus;
 import com.vet_saas.modules.delivery.model.Repartidor;
 import com.vet_saas.modules.delivery.model.RepartidorStatus;
 import com.vet_saas.modules.delivery.repository.DeliveryRepository;
+import com.vet_saas.modules.delivery.mapper.DeliveryMapper;
 import com.vet_saas.modules.delivery.repository.RepartidorRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -23,6 +24,7 @@ public class AsignacionService {
     private final RepartidorRepository repartidorRepository;
     private final DeliveryRepository deliveryRepository;
     private final SimpMessagingTemplate wsTemplate;
+    private final DeliveryMapper deliveryMapper;
 
     private static final double RADIO_INICIAL_KM = 3.0;
     private static final double RADIO_EXPANSION_KM = 2.0;
@@ -50,7 +52,7 @@ public class AsignacionService {
 
         if (candidatos.isEmpty()) {
             log.info("Delivery {}: sin repartidores en {}km. Intento {}",
-                delivery.getIdDelivery(), radio, delivery.getIntentosAsignacion() + 1);
+                delivery.getId(), radio, delivery.getIntentosAsignacion() + 1);
             delivery.setIntentosAsignacion(delivery.getIntentosAsignacion() + 1);
             deliveryRepository.save(delivery);
             return false;
@@ -75,23 +77,13 @@ public class AsignacionService {
         deliveryRepository.save(delivery);
 
         log.info("Delivery {} asignado al repartidor {}",
-            delivery.getIdDelivery(), repartidor.getIdRepartidor());
+            delivery.getId(), repartidor.getIdRepartidor());
 
         // Notificar al repartidor via WebSocket
-        // (En producción: también Firebase FCM para push notification)
         wsTemplate.convertAndSendToUser(
             repartidor.getUsuario().getId().toString(),
             "/queue/pedidos",
-            new NuevoPedidoEvent(delivery.getIdDelivery(), delivery.getOrigenDireccion(),
-                delivery.getDestinoDireccion(), delivery.getCostoDelivery())
+            deliveryMapper.toResponseDTO(delivery)
         );
     }
-
-    /** Inner record para el evento WebSocket al repartidor */
-    public record NuevoPedidoEvent(
-        Long deliveryId,
-        String origenDireccion,
-        String destinoDireccion,
-        java.math.BigDecimal costoDelivery
-    ) {}
 }

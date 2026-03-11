@@ -9,6 +9,7 @@ import org.mapstruct.*;
 @Mapper(componentModel = "spring", nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)
 public interface DeliveryMapper {
 
+    @Mapping(target = "idDelivery",       source = "id")
     @Mapping(target = "ordenId",            source = "orden.id")
     @Mapping(target = "repartidorId",       source = "repartidor.idRepartidor")
     @Mapping(target = "repartidorNombre",   expression = "java(getRepartidorNombre(delivery))")
@@ -21,6 +22,7 @@ public interface DeliveryMapper {
     DeliveryResponseDTO toResponseDTO(Delivery delivery);
 
     /** Copia de toResponseDTO pero con OTP incluido (solo al crear) */
+    @Mapping(target = "idDelivery",       source = "delivery.id")
     @Mapping(target = "ordenId",            source = "delivery.orden.id")
     @Mapping(target = "repartidorId",       source = "delivery.repartidor.idRepartidor")
     @Mapping(target = "repartidorNombre",   expression = "java(getRepartidorNombre(delivery))")

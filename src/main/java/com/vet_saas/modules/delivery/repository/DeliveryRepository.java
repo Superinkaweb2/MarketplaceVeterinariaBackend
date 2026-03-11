@@ -14,11 +14,12 @@ import java.util.Optional;
 @Repository
 public interface DeliveryRepository extends JpaRepository<Delivery, Long> {
 
+    List<Delivery> findByEstado(DeliveryStatus estado);
+
     @Query("SELECT d FROM Delivery d WHERE d.orden.id = :ordenId")
     Optional<Delivery> findByOrdenId(@Param("ordenId") Long ordenId);
 
-    Optional<Delivery> findByRepartidorIdRepartidorAndEstadoNotIn(
-            Long repartidorId, List<DeliveryStatus> estadosExcluidos);
+    Optional<Delivery> findByRepartidorIdRepartidorAndEstadoNotIn(Long repartidorId, List<DeliveryStatus> estadosExcluidos);
 
     /**
      * Para el scheduler: deliveries buscando repartidor por mas de X minutos
@@ -53,4 +54,10 @@ public interface DeliveryRepository extends JpaRepository<Delivery, Long> {
 
     @Query("SELECT COUNT(d) > 0 FROM Delivery d WHERE d.orden.id = :ordenId")
     boolean existsByOrdenId(@Param("ordenId") Long ordenId);
+
+    @Query("SELECT COUNT(d) > 0 FROM Delivery d WHERE d.repartidor.idRepartidor = :repartidorId AND d.estado NOT IN :estados")
+    boolean existsByRepartidorIdAndEstadoNotIn(
+        @Param("repartidorId") Long repartidorId, 
+        @Param("estados") List<DeliveryStatus> estados
+    );
 }

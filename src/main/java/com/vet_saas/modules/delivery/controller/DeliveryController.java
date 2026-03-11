@@ -90,6 +90,22 @@ public class DeliveryController {
         return ResponseEntity.ok().build();
     }
 
+    /** Repartidor ve el pool de pedidos disponibles */
+    @GetMapping("/disponibles")
+    @PreAuthorize("hasRole('REPARTIDOR')")
+    public ResponseEntity<java.util.List<DeliveryResponseDTO>> getDisponibles() {
+        return ResponseEntity.ok(deliveryService.getPedidosDisponibles());
+    }
+
+    /** Repartidor toma un pedido del pool */
+    @PostMapping("/{deliveryId}/aceptar")
+    @PreAuthorize("hasRole('REPARTIDOR')")
+    public ResponseEntity<DeliveryResponseDTO> aceptarPedido(
+            @PathVariable Long deliveryId,
+            @AuthenticationPrincipal Usuario principal) {
+        return ResponseEntity.ok(deliveryService.aceptarPedido(deliveryId, principal.getId()));
+    }
+
     // ---- Empresa (dashboard) ----
 
     /** Ver detalle de un delivery específico */
