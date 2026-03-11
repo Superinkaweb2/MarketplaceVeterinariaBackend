@@ -78,8 +78,7 @@ public class ProductService {
     }
 
     @Transactional
-    public ProductResponse updateProduct(Usuario usuario, Long id, UpdateProductDto dto,
-            List<MultipartFile> newImageFiles, boolean replaceImages) {
+    public ProductResponse updateProduct(Usuario usuario, Long id, UpdateProductDto dto, List<MultipartFile> newImageFiles, boolean replaceImages) {
         Empresa empresa = getEmpresaFromUsuario(usuario);
         Producto producto = getProductoPropio(id, empresa.getId());
 
@@ -96,22 +95,14 @@ public class ProductService {
             producto.setCategoria(categoria);
         }
 
-        if (dto.nombre() != null)
-            producto.setNombre(dto.nombre());
-        if (dto.descripcion() != null)
-            producto.setDescripcion(dto.descripcion());
-        if (dto.precio() != null)
-            producto.setPrecio(dto.precio());
-        if (dto.precioOferta() != null)
-            producto.setPrecioOferta(dto.precioOferta());
-        if (dto.ofertaInicio() != null)
-            producto.setOfertaInicio(dto.ofertaInicio());
-        if (dto.ofertaFin() != null)
-            producto.setOfertaFin(dto.ofertaFin());
-        if (dto.stock() != null)
-            producto.setStock(dto.stock());
-        if (dto.visible() != null)
-            producto.setVisible(dto.visible());
+        if (dto.nombre() != null) producto.setNombre(dto.nombre());
+        if (dto.descripcion() != null) producto.setDescripcion(dto.descripcion());
+        if (dto.precio() != null) producto.setPrecio(dto.precio());
+        if (dto.precioOferta() != null) producto.setPrecioOferta(dto.precioOferta());
+        if (dto.ofertaInicio() != null) producto.setOfertaInicio(dto.ofertaInicio());
+        if (dto.ofertaFin() != null) producto.setOfertaFin(dto.ofertaFin());
+        if (dto.stock() != null) producto.setStock(dto.stock());
+        if (dto.visible() != null) producto.setVisible(dto.visible());
 
         if (dto.estado() != null) {
             try {
@@ -121,12 +112,32 @@ public class ProductService {
             }
         }
 
-        if (replaceImages && newImageFiles != null && !newImageFiles.isEmpty()) {
-            if (producto.getImagenes() != null) {
-                producto.getImagenes().forEach(storageService::deleteFile);
-            }
-            producto.setImagenes(uploadImages(newImageFiles));
+        List<String> urlsA_Mantener = dto.imagenes() != null ? new ArrayList<>(dto.imagenes()) : new ArrayList<>();
+
+        List<String> urlsExistentes = producto.getImagenes() != null ? producto.getImagenes() : new ArrayList<>();
+
+        urlsExistentes.stream()
+                .filter(url -> !urlsA_Mantener.contains(url))
+                .forEach(storageService::deleteFile);
+
+        List<String> listaFinal;
+        if (replaceImages) {
+            urlsA_Mantener.forEach(storageService::deleteFile);
+            listaFinal = new ArrayList<>();
+        } else {
+            listaFinal = urlsA_Mantener;
         }
+
+        if (newImageFiles != null && !newImageFiles.isEmpty()) {
+            int spaceLeft = MAX_IMAGES - listaFinal.size();
+
+            if (newImageFiles.size() > spaceLeft) {
+                throw new BusinessException("No puedes tener más de " + MAX_IMAGES + " imágenes. Espacio restante: " + spaceLeft);
+            }
+            List<String> uploadedUrls = uploadImages(newImageFiles);
+            listaFinal.addAll(uploadedUrls);
+        }
+        producto.setImagenes(listaFinal);
 
         return mapToResponse(productoRepository.save(producto));
     }
@@ -185,8 +196,15 @@ public class ProductService {
     }
 
     private List<String> uploadImages(List<MultipartFile> files) {
-        if (files == null || files.isEmpty())
-            return new ArrayList<>();
+        if (files == null || files.isEmpty()) return new ArrayList<>();
+
+        for (MultipartFile file : files) {
+            String contentType = file.getContentType();
+            if (contentType == null || !contentType.startsWith("image/")) {
+                throw new BusinessException("El archivo " + file.getOriginalFilename() + " no es una imagen válida.");
+            }
+        }
+
         if (files.size() > MAX_IMAGES) {
             throw new BusinessException("Solo se permiten un máximo de " + MAX_IMAGES + " imágenes.");
         }
