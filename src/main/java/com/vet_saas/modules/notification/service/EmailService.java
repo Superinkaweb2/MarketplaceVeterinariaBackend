@@ -128,11 +128,12 @@ public class EmailService {
     @Async("mailExecutor")
     public void sendVerificationEmail(Usuario usuario, String token) {
         try {
+            String frontendUrl = appProperties.getExternal().getFrontendUrl();
             Context context = new Context();
             context.setVariable("nombreUsuario", usuario.getCorreo());
             context.setVariable("token", token);
             // URL base extraída de config o properties
-            String verificationUrl = "http://localhost:5173/auth/verify-email?token=" + token;
+            String verificationUrl = frontendUrl + "/auth/verify-email?token=" + token;
             context.setVariable("verificationUrl", verificationUrl);
 
             String htmlContent = templateEngine.process("email/verify-email", context);
@@ -159,10 +160,11 @@ public class EmailService {
     @Async("mailExecutor")
     public void sendPasswordResetEmail(Usuario usuario, String token) {
         try {
+            String frontendUrl = appProperties.getExternal().getFrontendUrl();
             Context context = new Context();
             context.setVariable("nombreUsuario", usuario.getCorreo());
             context.setVariable("token", token);
-            String resetUrl = "http://localhost:5173/auth/reset-password?token=" + token;
+            String resetUrl = frontendUrl + "/auth/reset-password?token=" + token;
             context.setVariable("resetUrl", resetUrl);
 
             String htmlContent = templateEngine.process("email/password-reset", context);
