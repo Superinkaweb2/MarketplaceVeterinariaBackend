@@ -17,6 +17,8 @@ import org.springframework.transaction.annotation.Transactional;
 import org.thymeleaf.TemplateEngine;
 import org.thymeleaf.context.Context;
 
+import java.math.BigDecimal;
+
 @Service
 @RequiredArgsConstructor
 public class EmailService {
@@ -87,6 +89,50 @@ public class EmailService {
     }
 
     /**
+     * Envia un email al cliente con su código OTP de entrega.
+     */
+    @Async("mailExecutor")
+    @Transactional(readOnly = true)
+    public void sendDeliveryOtpEmail(Long ordenId, String otpCode) {
+        try {
+            Orden orden = ordenRepository.findByIdForEmail(ordenId)
+                    .orElseThrow(() -> new IllegalStateException("Order not found for OTP email: " + ordenId));
+
+            String emailDestino = orden.getUsuarioCliente().getCorreo();
+            if (emailDestino == null || emailDestino.isBlank()) {
+                LOGGER.warn("OTP email not sent. Missing customer email orderId={}", ordenId);
+                return;
+            }
+
+            Context context = new Context();
+            context.setVariable("nombreCliente", emailDestino);
+            context.setVariable("codigoOrden", orden.getCodigoOrden());
+            context.setVariable("nombreEmpresa", orden.getEmpresa().getNombreComercial());
+            context.setVariable("items", orden.getDetalles());
+            context.setVariable("total", orden.getTotal());
+            context.setVariable("otpCode", otpCode);
+            context.setVariable("costoEnvio", orden.getCostoEnvio() != null ? orden.getCostoEnvio() : BigDecimal.ZERO);
+
+            String htmlContent = templateEngine.process("email/order-confirmation", context);
+
+            MimeMessage message = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+
+            helper.setTo(emailDestino);
+            helper.setSubject("Tu código de entrega - " + orden.getCodigoOrden());
+            helper.setText(htmlContent, true);
+            helper.setFrom(appProperties.getExternal().getMail().getUsername());
+
+            mailSender.send(message);
+
+            LOGGER.info("Delivery OTP email sent orderId={} email={}", ordenId, emailDestino);
+
+        } catch (Exception ex) {
+            LOGGER.error("Error sending delivery OTP email orderId={} error={}", ordenId, ex.getMessage(), ex);
+        }
+    }
+
+    /**
      * Envia un correo de bienvenida a nuevos usuarios.
      * Ejecuta de forma asíncrona.
      */
@@ -128,11 +174,12 @@ public class EmailService {
     @Async("mailExecutor")
     public void sendVerificationEmail(Usuario usuario, String token) {
         try {
+            String frontendUrl = appProperties.getExternal().getFrontendUrl();
             Context context = new Context();
             context.setVariable("nombreUsuario", usuario.getCorreo());
             context.setVariable("token", token);
             // URL base extraída de config o properties
-            String verificationUrl = "http://localhost:5173/auth/verify-email?token=" + token;
+            String verificationUrl = frontendUrl + "/auth/verify-email?token=" + token;
             context.setVariable("verificationUrl", verificationUrl);
 
             String htmlContent = templateEngine.process("email/verify-email", context);
@@ -159,10 +206,11 @@ public class EmailService {
     @Async("mailExecutor")
     public void sendPasswordResetEmail(Usuario usuario, String token) {
         try {
+            String frontendUrl = appProperties.getExternal().getFrontendUrl();
             Context context = new Context();
             context.setVariable("nombreUsuario", usuario.getCorreo());
             context.setVariable("token", token);
-            String resetUrl = "http://localhost:5173/auth/reset-password?token=" + token;
+            String resetUrl = frontendUrl + "/auth/reset-password?token=" + token;
             context.setVariable("resetUrl", resetUrl);
 
             String htmlContent = templateEngine.process("email/password-reset", context);

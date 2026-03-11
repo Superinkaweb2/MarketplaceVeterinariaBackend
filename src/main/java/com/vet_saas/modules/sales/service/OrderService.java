@@ -77,6 +77,17 @@ public class OrderService {
 
         String codigo = "ORD-" + System.currentTimeMillis();
 
+        // Procesar dirección de envío
+        HashMap<String, Object> direccionEnvio = new HashMap<>();
+        if (dto.destinoDireccion() != null && !dto.destinoDireccion().isEmpty()) {
+            direccionEnvio.put("lat", dto.destinoLat());
+            direccionEnvio.put("lng", dto.destinoLng());
+            direccionEnvio.put("direccion", dto.destinoDireccion());
+            if (dto.destinoReferencia() != null) {
+                direccionEnvio.put("referencia", dto.destinoReferencia());
+            }
+        }
+
         Orden orden = Orden.builder()
                 .codigoOrden(codigo)
                 .usuarioCliente(usuario)
@@ -84,7 +95,7 @@ public class OrderService {
                 .veterinario(veterinario)
                 .estado(EstadoOrden.PENDIENTE)
                 .detalles(new ArrayList<>())
-                .direccionEnvio(new HashMap<>())
+                .direccionEnvio(direccionEnvio)
                 .metodoPago("POR_DEFINIR") // Valor temporal hasta integrar pasarela
                 .build();
 
@@ -147,9 +158,13 @@ public class OrderService {
         }
 
         orden.setSubtotal(subtotalGeneral);
-        orden.setCostoEnvio(BigDecimal.ZERO); // A futuro: Calcular envio
+        
+        // Si hay costo de envío se asigna, si es null entonces es 0 (retiro en tienda)
+        BigDecimal costoEnvio = dto.costoEnvio() != null ? dto.costoEnvio() : BigDecimal.ZERO;
+        orden.setCostoEnvio(costoEnvio);
+        
         orden.setComisionPlataforma(subtotalGeneral.multiply(new BigDecimal("0.05"))); // 5% Comision
-        orden.setTotal(subtotalGeneral.add(orden.getCostoEnvio()));
+        orden.setTotal(subtotalGeneral.add(costoEnvio));
 
         ordenRepository.save(orden);
 

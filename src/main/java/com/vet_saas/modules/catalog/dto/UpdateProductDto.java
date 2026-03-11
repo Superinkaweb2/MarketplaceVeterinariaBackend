@@ -2,6 +2,7 @@ package com.vet_saas.modules.catalog.dto;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 
 public record UpdateProductDto(
         String nombre,
@@ -14,5 +15,6 @@ public record UpdateProductDto(
         String sku,
         Long categoriaId,
         Boolean visible,
-        String estado) {
-}
+        String estado,
+        List<String> imagenes
+) {}

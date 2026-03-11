@@ -177,56 +177,22 @@ public class PaymentService {
         }
     }
 
-    @Transactional
     public void processWebhook(String paymentId, String pathEmpresaId) {
         LOGGER.info("Webhook recibido. paymentId: {} empresaId: {}", paymentId, pathEmpresaId);
 
-        // 1. Idempotencia
-        if (pagoRepository.existsByMpPaymentId(paymentId)) {
-            LOGGER.info("Webhook ignorado por idempotencia. paymentId: {}", paymentId);
-            return;
-        }
-
         try {
-            // 3. Obtener token para consulta (Empresa o Plataforma)
-            Map<String, Object> metadata = null;
-            String tokenToUse = null;
 
-            // Intento inicial con token de plataforma para ver metadata si pathEmpresaId es
-            // null
-            if (pathEmpresaId == null) {
-                tokenToUse = appProperties.getExternal().getMercadoPago().getAccessToken();
-            } else {
-                if (pathEmpresaId.startsWith("vet_")) {
-                    Long vetId = Long.parseLong(pathEmpresaId.substring(4));
-                    Veterinario veterinario = veterinarioRepository.findById(vetId)
-                            .orElseThrow(() -> new BusinessException("Veterinario " + vetId + " no encontrado"));
-                    tokenToUse = cryptoUtil.decrypt(veterinario.getMpAccessToken());
-                } else {
-                    Long empId = Long.parseLong(pathEmpresaId);
-                    Empresa empresa = empresaRepository.findById(empId)
-                            .orElseThrow(() -> new BusinessException("Empresa " + empId + " no encontrada"));
-                    tokenToUse = cryptoUtil.decrypt(empresa.getMpAccessToken());
-                }
-            }
+            String tokenToUse = determineTokenToUse(pathEmpresaId);
 
-            // 2. Consulta a Mercado Pago
             Payment payment = mpGateway.getPaymentDetails(paymentId, tokenToUse);
-            metadata = payment.getMetadata();
+            Map<String, Object> metadata = payment.getMetadata();
 
             if (metadata == null) {
                 LOGGER.error("El pago {} no contiene metadata", paymentId);
                 return;
             }
 
-            String type = metadata.get("type") != null ? metadata.get("type").toString() : "ORDER";
-
-            // 4. Manejo por tipo de pago
-            if ("SUBSCRIPTION".equals(type)) {
-                handleSubscriptionWebhook(payment, metadata);
-            } else {
-                handleOrderWebhook(payment, metadata, pathEmpresaId);
-            }
+            processPaymentDatabaseTransaction(payment, metadata, pathEmpresaId);
 
         } catch (Exception ex) {
             LOGGER.error("Error crítico al procesar el pago {}", paymentId, ex);
@@ -270,30 +236,50 @@ public class PaymentService {
             return;
         }
 
-        Long vendorId = Double.valueOf(metadata.get("vendor_id").toString()).longValue();
+        Long vendorId = ((Number) metadata.get("vendor_id")).longValue();
         String vendorType = metadata.get("vendor_type") != null ? metadata.get("vendor_type").toString() : "EMPRESA";
 
         if (pathEmpresaId != null) {
             String mpVendorKey = "VETERINARIO".equals(vendorType) ? "vet_" + vendorId : vendorId.toString();
             if (!mpVendorKey.equals(pathEmpresaId)) {
-                LOGGER.error("MIX DE TENANT DETECTADO. mpVendorKey ({}) != pathEmpresaId ({})", mpVendorKey,
-                        pathEmpresaId);
+                LOGGER.error("MIX DE TENANT DETECTADO. mpVendorKey ({}) != pathEmpresaId ({})", mpVendorKey, pathEmpresaId);
                 throw new ForbiddenException("El pago no pertenece a este vendedor.");
             }
         }
 
-        // 4. Lock the order row — serializes concurrent webhook processing
         Orden orden = ordenRepository.findByCodigoOrdenForUpdate(payment.getExternalReference())
                 .orElseThrow(() -> new BusinessException("Orden no encontrada: " + payment.getExternalReference()));
 
-        // 5. Re-check idempotency AFTER acquiring lock
-        if (pagoRepository.existsByMpPaymentId(payment.getId().toString())) {
-            LOGGER.info("Webhook duplicado ignorado (post-lock idempotencia). paymentId: {}", payment.getId());
-            return;
+        String mpStatus = payment.getStatus();
+
+        Pago pagoActual = pagoRepository.findByMpPaymentId(payment.getId().toString()).orElse(null);
+
+        if (pagoActual != null) {
+            if (pagoActual.getEstado().equals(mpStatus)) {
+                LOGGER.info("Webhook ignorado. El pago {} ya fue procesado con el estado {}", payment.getId(), mpStatus);
+                return;
+            }
+
+            LOGGER.info("Actualizando pago {} de estado {} a {}", payment.getId(), pagoActual.getEstado(), mpStatus);
+            pagoActual.setEstado(mpStatus);
+            pagoRepository.save(pagoActual);
+        } else {
+
+            Empresa empresa = "EMPRESA".equals(vendorType) ? empresaRepository.findById(vendorId).orElseThrow() : null;
+            Veterinario veterinario = "VETERINARIO".equals(vendorType) ? veterinarioRepository.findById(vendorId).orElseThrow() : null;
+
+            pagoActual = Pago.builder()
+                    .empresa(empresa)
+                    .veterinario(veterinario)
+                    .orden(orden)
+                    .mpPaymentId(payment.getId().toString())
+                    .monto(payment.getTransactionAmount())
+                    .metodoPago(payment.getPaymentMethodId())
+                    .estado(mpStatus)
+                    .build();
+            pagoRepository.save(pagoActual);
         }
 
-        // 6. Mapeo de Estados
-        String mpStatus = payment.getStatus();
         EstadoOrden nuevoEstado = switch (mpStatus) {
             case "approved" -> EstadoOrden.PAGADO;
             case "rejected" -> EstadoOrden.FALLIDO;
@@ -301,38 +287,45 @@ public class PaymentService {
             default -> orden.getEstado();
         };
 
-        // 7. Actualización de Base de Datos
         if (nuevoEstado != orden.getEstado()) {
             orden.setEstado(nuevoEstado);
             orden.setMetodoPago(payment.getPaymentMethodId());
             ordenRepository.save(orden);
             LOGGER.info("Orden {} actualizada al estado {}", orden.getCodigoOrden(), nuevoEstado);
+
+
+            if (nuevoEstado == EstadoOrden.PAGADO) {
+                eventPublisher.publishEvent(new OrderPaidEvent(this, orden));
+            }
+        }
+    }
+
+    private String determineTokenToUse(String pathEmpresaId) {
+        if (pathEmpresaId == null) {
+            return appProperties.getExternal().getMercadoPago().getAccessToken();
         }
 
-        // 8. Registro de Pago
-        Empresa empresa = null;
-        Veterinario veterinario = null;
-        if ("EMPRESA".equals(vendorType)) {
-            empresa = empresaRepository.findById(vendorId).orElseThrow();
+        if (pathEmpresaId.startsWith("vet_")) {
+            Long vetId = Long.parseLong(pathEmpresaId.substring(4));
+            Veterinario veterinario = veterinarioRepository.findById(vetId)
+                    .orElseThrow(() -> new BusinessException("Veterinario " + vetId + " no encontrado"));
+            return cryptoUtil.decrypt(veterinario.getMpAccessToken());
+        }
+
+        Long empId = Long.parseLong(pathEmpresaId);
+        Empresa empresa = empresaRepository.findById(empId)
+                .orElseThrow(() -> new BusinessException("Empresa " + empId + " no encontrada"));
+        return cryptoUtil.decrypt(empresa.getMpAccessToken());
+    }
+
+    @Transactional
+    public void processPaymentDatabaseTransaction(Payment payment, Map<String, Object> metadata, String pathEmpresaId) {
+        String type = metadata.get("type") != null ? metadata.get("type").toString() : "ORDER";
+
+        if ("SUBSCRIPTION".equals(type)) {
+            handleSubscriptionWebhook(payment, metadata);
         } else {
-            veterinario = veterinarioRepository.findById(vendorId).orElseThrow();
-        }
-
-        Pago pagoModel = Pago.builder()
-                .empresa(empresa)
-                .veterinario(veterinario)
-                .orden(orden)
-                .mpPaymentId(payment.getId().toString())
-                .monto(payment.getTransactionAmount())
-                .metodoPago(payment.getPaymentMethodId())
-                .estado(mpStatus)
-                .build();
-
-        pagoRepository.save(pagoModel);
-
-        // 9. Evento de Negocio
-        if (nuevoEstado == EstadoOrden.PAGADO) {
-            eventPublisher.publishEvent(new OrderPaidEvent(this, orden));
+            handleOrderWebhook(payment, metadata, pathEmpresaId);
         }
     }
 }
