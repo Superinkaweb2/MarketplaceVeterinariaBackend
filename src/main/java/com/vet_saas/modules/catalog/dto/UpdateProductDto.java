@@ -16,5 +16,6 @@ public record UpdateProductDto(
         Long categoriaId,
         Boolean visible,
         String estado,
-        List<String> imagenes
+        List<String> imagenes,
+        Boolean actualizarOferta
 ) {}

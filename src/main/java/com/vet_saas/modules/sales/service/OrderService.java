@@ -21,6 +21,10 @@ import com.vet_saas.modules.user.repository.UsuarioRepository;
 import com.vet_saas.modules.veterinarian.model.Veterinario;
 import com.vet_saas.modules.veterinarian.repository.VeterinarioRepository;
 import lombok.RequiredArgsConstructor;
+import com.vet_saas.modules.points.service.PointsService;
+import com.vet_saas.modules.points.service.RewardService;
+import com.vet_saas.modules.client.model.PerfilCliente;
+import com.vet_saas.modules.client.repository.ClienteRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -41,6 +45,9 @@ public class OrderService {
     private final EmpresaRepository empresaRepository;
     private final VeterinarioRepository veterinarioRepository;
     private final UsuarioRepository usuarioRepository;
+    private final PointsService pointsService;
+    private final ClienteRepository clienteRepository;
+    private final RewardService rewardService;
 
     @Transactional(readOnly = true)
     public Page<OrderResponseDto> getMyOrders(Usuario usuario, Pageable pageable) {
@@ -164,9 +171,84 @@ public class OrderService {
         orden.setCostoEnvio(costoEnvio);
         
         orden.setComisionPlataforma(subtotalGeneral.multiply(new BigDecimal("0.05"))); // 5% Comision
-        orden.setTotal(subtotalGeneral.add(costoEnvio));
+
+        // ===== APLICAR DESCUENTO DE RECOMPENSA CANJEADA =====
+        BigDecimal descuentoTotal = BigDecimal.ZERO;
+        if (dto.canjeRecompensaId() != null) {
+            try {
+                com.vet_saas.modules.points.model.CanjeRecompensa canje = 
+                    rewardService.getCanjeById(dto.canjeRecompensaId());
+                
+                if (canje.getUtilizado()) {
+                    throw new BusinessException("Esta recompensa ya fue utilizada");
+                }
+                
+                com.vet_saas.modules.points.model.Recompensa recompensa = canje.getRecompensa();
+                
+                // Calcular el descuento basado en el tipo
+                if ("PORCENTAJE".equals(recompensa.getTipoDescuento())) {
+                    if (Boolean.TRUE.equals(recompensa.getAplicaACiertosProductos()) && recompensa.getProductos() != null) {
+                        // Aplicar solo a productos elegibles
+                        for (DetalleOrden detalle : orden.getDetalles()) {
+                            if (detalle.getProducto() != null && recompensa.getProductos().stream()
+                                    .anyMatch(p -> p.getId().equals(detalle.getProducto().getId()))) {
+                                BigDecimal descItem = detalle.getSubtotal()
+                                    .multiply(recompensa.getValorDescuento())
+                                    .divide(new BigDecimal("100"), 2, java.math.RoundingMode.HALF_UP);
+                                descuentoTotal = descuentoTotal.add(descItem);
+                            }
+                        }
+                    } else {
+                        // Aplicar a toda la orden
+                        descuentoTotal = subtotalGeneral
+                            .multiply(recompensa.getValorDescuento())
+                            .divide(new BigDecimal("100"), 2, java.math.RoundingMode.HALF_UP);
+                    }
+                } else if ("MONTO_FIJO".equals(recompensa.getTipoDescuento())) {
+                    descuentoTotal = recompensa.getValorDescuento();
+                }
+                
+                // No permitir descuento mayor al subtotal
+                if (descuentoTotal.compareTo(subtotalGeneral) > 0) {
+                    descuentoTotal = subtotalGeneral;
+                }
+            } catch (BusinessException e) {
+                throw e;
+            } catch (Exception e) {
+                System.err.println("Error applying reward discount: " + e.getMessage());
+            }
+        }
+        
+        orden.setDescuento(descuentoTotal);
+        orden.setTotal(subtotalGeneral.add(costoEnvio).subtract(descuentoTotal));
 
         ordenRepository.save(orden);
+        
+        // Mark reward as used after saving order
+        if (dto.canjeRecompensaId() != null && descuentoTotal.compareTo(BigDecimal.ZERO) > 0) {
+            try {
+                rewardService.markRewardAsUsed(dto.canjeRecompensaId(), orden.getId());
+            } catch (Exception e) {
+                System.err.println("Error marking reward as used: " + e.getMessage());
+            }
+        }
+        
+        // Gamification logic (Earning Points for Purchases)
+        if (usuario.getRol() == Role.CLIENTE) {
+             try {
+                 clienteRepository.findByUsuarioId(usuario.getId()).ifPresent(perfil -> {
+                      // Check if it's the first order
+                      long ordersCount = ordenRepository.findByUsuarioClienteId(usuario.getId(), Pageable.unpaged()).getTotalElements();
+                      if (ordersCount == 1) { // 1 means this is the first one saved
+                          pointsService.addPoints(perfil.getId(), "PRIMERA_COMPRA", orden.getId(), "¡Felicidades por tu primera compra!");
+                      } else {
+                          pointsService.addPoints(perfil.getId(), "COMPRA", orden.getId(), "Puntos por compra #" + orden.getCodigoOrden());
+                      }
+                 });
+             } catch (Exception e) {
+                 System.err.println("Error adding points for purchase: " + e.getMessage());
+             }
+        }
 
         return orden.getId();
     }

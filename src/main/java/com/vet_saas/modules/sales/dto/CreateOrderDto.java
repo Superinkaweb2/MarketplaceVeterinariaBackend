@@ -15,6 +15,9 @@ public record CreateOrderDto(
                 BigDecimal destinoLng,
                 String destinoDireccion,
                 String destinoReferencia,
+                
+                // Recompensa
+                Long canjeRecompensaId,
 
                 @NotEmpty(message = "El carrito no puede estar vacío") List<OrderItemDto> items) {
 }

@@ -16,6 +16,8 @@ import com.vet_saas.modules.delivery.repository.DeliveryEstadoRepository;
 import com.vet_saas.modules.delivery.repository.DeliveryRepository;
 import com.vet_saas.modules.delivery.repository.RepartidorRepository;
 import com.vet_saas.modules.notification.service.EmailService;
+import com.vet_saas.modules.points.service.PointsService;
+import com.vet_saas.modules.client.repository.ClienteRepository;
 import com.vet_saas.modules.sales.model.Orden;
 import com.vet_saas.modules.user.repository.UsuarioRepository;
 import lombok.RequiredArgsConstructor;
@@ -50,6 +52,8 @@ public class DeliveryService {
     private final DeliveryMapper deliveryMapper;
     private final EmpresaRepository empresaRepository;
     private final EmailService emailService;
+    private final PointsService pointsService;
+    private final ClienteRepository clienteRepository;
 
     private static final int OTP_EXPIRACION_HORAS = 4;
     private static final String CLOUDINARY_FOLDER_DELIVERY = "deliveries/confirmaciones";
@@ -357,6 +361,15 @@ public class DeliveryService {
 
         // Recalcular promedio del repartidor
         recalcularCalificacionRepartidor(delivery.getRepartidor().getIdRepartidor());
+        
+        // Gamification (Reward client for rating)
+        try {
+            clienteRepository.findByUsuarioId(clienteId).ifPresent(perfil -> {
+                 pointsService.addPoints(perfil.getId(), "CALIFICAR_DELIVERY", delivery.getId(), "Gracias por calificar tu entrega");
+            });
+        } catch (Exception e) {
+            System.err.println("Error adding points for rating delivery: " + e.getMessage());
+        }
     }
 
     @Transactional(readOnly = true)
