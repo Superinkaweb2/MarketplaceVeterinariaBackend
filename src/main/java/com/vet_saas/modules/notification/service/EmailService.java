@@ -1,16 +1,16 @@
 package com.vet_saas.modules.notification.service;
 
+import com.resend.Resend;
+import com.resend.core.exception.ResendException;
+import com.resend.services.emails.model.CreateEmailOptions;
+import com.resend.services.emails.model.CreateEmailResponse;
 import com.vet_saas.config.AppProperties;
 import com.vet_saas.modules.sales.model.Orden;
 import com.vet_saas.modules.sales.repository.OrdenRepository;
 import com.vet_saas.modules.user.model.Usuario;
-import jakarta.mail.MessagingException;
-import jakarta.mail.internet.MimeMessage;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.mail.javamail.JavaMailSender;
-import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -24,30 +24,46 @@ import java.math.BigDecimal;
 public class EmailService {
     private final Logger LOGGER = LoggerFactory.getLogger(EmailService.class);
 
-    private final JavaMailSender mailSender;
     private final TemplateEngine templateEngine;
     private final OrdenRepository ordenRepository;
     private final AppProperties appProperties;
 
-    /**
-     * Envia el email de confirmacion de orden.
-     * Se ejecuta de forma asincrona y no debe afectar el flujo principal del
-     * dominio.
-     */
+    private Resend getResendClient() {
+        String apiKey = appProperties.getExternal().getResend().getApiKey();
+        LOGGER.info("Initializing Resend client with API Key (length: {})", apiKey != null ? apiKey.length() : "null");
+        return new Resend(apiKey);
+    }
+
+    private void sendEmail(String to, String subject, String htmlContent) {
+        try {
+            Resend resend = getResendClient();
+            String from = appProperties.getExternal().getResend().getFromEmail();
+
+            CreateEmailOptions params = CreateEmailOptions.builder()
+                    .from(from)
+                    .to(to)
+                    .subject(subject)
+                    .html(htmlContent)
+                    .build();
+
+            CreateEmailResponse response = resend.emails().send(params);
+            LOGGER.info("Email sent successfully via Resend. ID: {}", response.getId());
+        } catch (ResendException ex) {
+            LOGGER.error("Resend API error sending email to {}: {}", to, ex.getMessage(), ex);
+        } catch (Exception ex) {
+            LOGGER.error("Unexpected error sending email to {}: {}", to, ex.getMessage(), ex);
+        }
+    }
+
     @Async("mailExecutor")
     @Transactional(readOnly = true)
     public void sendOrderConfirmation(Long ordenId) {
-
         try {
             Orden orden = ordenRepository.findByIdForEmail(ordenId)
                     .orElseThrow(() -> new IllegalStateException("Order not found for email: " + ordenId));
 
             String emailDestino = orden.getUsuarioCliente().getCorreo();
-
-            if (emailDestino == null || emailDestino.isBlank()) {
-                LOGGER.warn("Email not sent. Missing customer email orderId={}", ordenId);
-                return;
-            }
+            if (emailDestino == null || emailDestino.isBlank()) return;
 
             Context context = new Context();
             context.setVariable("nombreCliente", emailDestino);
@@ -57,40 +73,13 @@ public class EmailService {
             context.setVariable("total", orden.getTotal());
 
             String htmlContent = templateEngine.process("email/order-confirmation", context);
-
-            MimeMessage message = mailSender.createMimeMessage();
-            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
-
-            helper.setTo(emailDestino);
-            helper.setSubject("Confirmación de compra - " + orden.getCodigoOrden());
-            helper.setText(htmlContent, true);
-            helper.setFrom(appProperties.getExternal().getMail().getUsername());
-
-            mailSender.send(message);
-
-            LOGGER.info("Order confirmation email sent orderId={} email={}",
-                    ordenId,
-                    emailDestino);
-
-        } catch (MessagingException ex) {
-
-            LOGGER.error("Email sending failed orderId={} error={}",
-                    ordenId,
-                    ex.getMessage(),
-                    ex);
+            sendEmail(emailDestino, "Confirmación de compra - " + orden.getCodigoOrden(), htmlContent);
 
         } catch (Exception ex) {
-
-            LOGGER.error("Unexpected error sending email orderId={} error={}",
-                    ordenId,
-                    ex.getMessage(),
-                    ex);
+            LOGGER.error("Error preparing order confirmation email orderId={}: {}", ordenId, ex.getMessage(), ex);
         }
     }
 
-    /**
-     * Envia un email al cliente con su código OTP de entrega.
-     */
     @Async("mailExecutor")
     @Transactional(readOnly = true)
     public void sendDeliveryOtpEmail(Long ordenId, String otpCode) {
@@ -99,10 +88,7 @@ public class EmailService {
                     .orElseThrow(() -> new IllegalStateException("Order not found for OTP email: " + ordenId));
 
             String emailDestino = orden.getUsuarioCliente().getCorreo();
-            if (emailDestino == null || emailDestino.isBlank()) {
-                LOGGER.warn("OTP email not sent. Missing customer email orderId={}", ordenId);
-                return;
-            }
+            if (emailDestino == null || emailDestino.isBlank()) return;
 
             Context context = new Context();
             context.setVariable("nombreCliente", emailDestino);
@@ -113,64 +99,30 @@ public class EmailService {
             context.setVariable("otpCode", otpCode);
             context.setVariable("costoEnvio", orden.getCostoEnvio() != null ? orden.getCostoEnvio() : BigDecimal.ZERO);
 
-            String htmlContent = templateEngine.process("email/order-confirmation", context);
-
-            MimeMessage message = mailSender.createMimeMessage();
-            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
-
-            helper.setTo(emailDestino);
-            helper.setSubject("Tu código de entrega - " + orden.getCodigoOrden());
-            helper.setText(htmlContent, true);
-            helper.setFrom(appProperties.getExternal().getMail().getUsername());
-
-            mailSender.send(message);
-
-            LOGGER.info("Delivery OTP email sent orderId={} email={}", ordenId, emailDestino);
+            String htmlContent = templateEngine.process("email/order-confirmation", context); // Usando el mismo template por ahora
+            sendEmail(emailDestino, "Tu código de entrega - " + orden.getCodigoOrden(), htmlContent);
 
         } catch (Exception ex) {
-            LOGGER.error("Error sending delivery OTP email orderId={} error={}", ordenId, ex.getMessage(), ex);
+            LOGGER.error("Error preparing delivery OTP email orderId={}: {}", ordenId, ex.getMessage(), ex);
         }
     }
 
-    /**
-     * Envia un correo de bienvenida a nuevos usuarios.
-     * Ejecuta de forma asíncrona.
-     */
     @Async("mailExecutor")
     public void sendWelcomeEmail(Usuario usuario) {
         try {
-            if (usuario.getCorreo() == null || usuario.getCorreo().isBlank()) {
-                LOGGER.warn("Bienvenida no enviada. Usuario o correo vacío.");
-                return;
-            }
+            if (usuario.getCorreo() == null || usuario.getCorreo().isBlank()) return;
 
             Context context = new Context();
             context.setVariable("nombreUsuario", usuario.getCorreo());
 
-            // Si tuvieramos nombre real, lo usariamos. Por ahora el correo.
-
             String htmlContent = templateEngine.process("email/welcome-email", context);
-
-            MimeMessage message = mailSender.createMimeMessage();
-            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
-
-            helper.setTo(usuario.getCorreo());
-            helper.setSubject("¡Bienvenido a VetSaaS!");
-            helper.setText(htmlContent, true);
-            helper.setFrom(appProperties.getExternal().getMail().getUsername());
-
-            mailSender.send(message);
-
-            LOGGER.info("Welcome email sent to {}", usuario.getCorreo());
+            sendEmail(usuario.getCorreo(), "¡Bienvenido a VetSaaS!", htmlContent);
 
         } catch (Exception ex) {
-            LOGGER.error("Error sending welcome email to {} error={}", usuario.getCorreo(), ex.getMessage(), ex);
+            LOGGER.error("Error preparing welcome email to {}: {}", usuario.getCorreo(), ex.getMessage(), ex);
         }
     }
 
-    /**
-     * Envia un correo de verificación de email.
-     */
     @Async("mailExecutor")
     public void sendVerificationEmail(Usuario usuario, String token) {
         try {
@@ -178,31 +130,17 @@ public class EmailService {
             Context context = new Context();
             context.setVariable("nombreUsuario", usuario.getCorreo());
             context.setVariable("token", token);
-            // URL base extraída de config o properties
             String verificationUrl = frontendUrl + "/auth/verify-email?token=" + token;
             context.setVariable("verificationUrl", verificationUrl);
 
             String htmlContent = templateEngine.process("email/verify-email", context);
+            sendEmail(usuario.getCorreo(), "Verifica tu correo - VetSaaS", htmlContent);
 
-            MimeMessage message = mailSender.createMimeMessage();
-            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
-
-            helper.setTo(usuario.getCorreo());
-            helper.setSubject("Verifica tu correo - VetSaaS");
-            helper.setText(htmlContent, true);
-            helper.setFrom(appProperties.getExternal().getMail().getUsername());
-
-            mailSender.send(message);
-
-            LOGGER.info("Verification email sent to {}", usuario.getCorreo());
         } catch (Exception ex) {
-            LOGGER.error("Error sending verification email to {} error={}", usuario.getCorreo(), ex.getMessage(), ex);
+            LOGGER.error("Error preparing verification email to {}: {}", usuario.getCorreo(), ex.getMessage(), ex);
         }
     }
 
-    /**
-     * Envia un correo de restablecimiento de contraseña.
-     */
     @Async("mailExecutor")
     public void sendPasswordResetEmail(Usuario usuario, String token) {
         try {
@@ -214,20 +152,10 @@ public class EmailService {
             context.setVariable("resetUrl", resetUrl);
 
             String htmlContent = templateEngine.process("email/password-reset", context);
+            sendEmail(usuario.getCorreo(), "Restablece tu contraseña - VetSaaS", htmlContent);
 
-            MimeMessage message = mailSender.createMimeMessage();
-            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
-
-            helper.setTo(usuario.getCorreo());
-            helper.setSubject("Restablece tu contraseña - VetSaaS");
-            helper.setText(htmlContent, true);
-            helper.setFrom(appProperties.getExternal().getMail().getUsername());
-
-            mailSender.send(message);
-
-            LOGGER.info("Password reset email sent to {}", usuario.getCorreo());
         } catch (Exception ex) {
-            LOGGER.error("Error sending reset email to {} error={}", usuario.getCorreo(), ex.getMessage(), ex);
+            LOGGER.error("Error preparing reset email to {}: {}", usuario.getCorreo(), ex.getMessage(), ex);
         }
     }
 }

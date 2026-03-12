@@ -73,6 +73,10 @@ app:
     mail:
       username: ${MAIL_USERNAME}
 
+    resend:
+      api-key: ${RESEND_API_KEY}
+      from-email: ${RESEND_FROM:onboarding@resend.dev}
+
 logging:
   level:
     root: INFO
