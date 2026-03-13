@@ -27,6 +27,9 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import com.vet_saas.modules.points.service.PointsService;
+import com.vet_saas.modules.client.repository.ClienteRepository;
+
 @Service
 @RequiredArgsConstructor
 public class AdoptionService {
@@ -36,6 +39,8 @@ public class AdoptionService {
     private final MascotaRepository mascotaRepository;
     private final EmpresaRepository empresaRepository;
     private final VeterinarioRepository veterinarioRepository;
+    private final PointsService pointsService;
+    private final ClienteRepository clienteRepository;
 
     @Transactional
     public AdoptionResponse publishAdoption(Usuario usuario, CreateAdoptionDto dto) {
@@ -184,6 +189,17 @@ public class AdoptionService {
                 Mascota mascota = adopcion.getMascota();
                 mascota.setUsuario(solicitud.getInteresado());
                 mascotaRepository.save(mascota);
+                
+                // Puntos por adopción
+                if (solicitud.getInteresado().getRol() == com.vet_saas.modules.user.model.Role.CLIENTE) {
+                     try {
+                         clienteRepository.findByUsuarioId(solicitud.getInteresado().getId()).ifPresent(perfil -> {
+                              pointsService.addPoints(perfil.getId(), "ADOPCION", adopcion.getId(), "Bono por darle un hogar a " + mascota.getNombre());
+                         });
+                     } catch(Exception e) {
+                         System.err.println("Error rewarding adoption points: " + e.getMessage());
+                     }
+                }
 
             } else {
                 // Simplemente rechazar esta solicitud particular

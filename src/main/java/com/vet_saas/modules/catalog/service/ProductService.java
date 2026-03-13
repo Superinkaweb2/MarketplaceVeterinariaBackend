@@ -22,6 +22,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -56,6 +57,8 @@ public class ProductService {
 
         Categoria categoria = categoriaRepository.findByIdAndActivoTrue(dto.categoriaId())
                 .orElseThrow(() -> new ResourceNotFoundException("Categoria", "id", dto.categoriaId()));
+
+        validatePricing(dto.precio(), dto.precioOferta());
 
         List<String> imageUrls = uploadImages(imageFiles);
 
@@ -98,9 +101,20 @@ public class ProductService {
         if (dto.nombre() != null) producto.setNombre(dto.nombre());
         if (dto.descripcion() != null) producto.setDescripcion(dto.descripcion());
         if (dto.precio() != null) producto.setPrecio(dto.precio());
-        if (dto.precioOferta() != null) producto.setPrecioOferta(dto.precioOferta());
-        if (dto.ofertaInicio() != null) producto.setOfertaInicio(dto.ofertaInicio());
-        if (dto.ofertaFin() != null) producto.setOfertaFin(dto.ofertaFin());
+        
+        // Si el flag actualizarOferta es true, aplicamos los valores del DTO (incluyendo null para limpiar)
+        if (Boolean.TRUE.equals(dto.actualizarOferta())) {
+            validatePricing(producto.getPrecio(), dto.precioOferta());
+            producto.setPrecioOferta(dto.precioOferta());
+            producto.setOfertaInicio(dto.ofertaInicio());
+            producto.setOfertaFin(dto.ofertaFin());
+        } else {
+            // Si no se pide actualizar oferta explícitamente, pero se cambió el precio base, validar contra la oferta actual
+            if (dto.precio() != null) {
+                validatePricing(producto.getPrecio(), producto.getPrecioOferta());
+            }
+        }
+
         if (dto.stock() != null) producto.setStock(dto.stock());
         if (dto.visible() != null) producto.setVisible(dto.visible());
 
@@ -193,6 +207,12 @@ public class ProductService {
             throw new BusinessException("Acceso denegado: No tienes permiso para editar este producto.");
         }
         return producto;
+    }
+
+    private void validatePricing(BigDecimal precio, BigDecimal precioOferta) {
+        if (precioOferta != null && precio != null && precioOferta.compareTo(precio) >= 0) {
+            throw new BusinessException("El precio de oferta debe ser menor al precio base.");
+        }
     }
 
     private List<String> uploadImages(List<MultipartFile> files) {

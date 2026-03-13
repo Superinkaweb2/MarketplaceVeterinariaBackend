@@ -19,6 +19,10 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import com.vet_saas.modules.points.service.PointsService;
+import com.vet_saas.modules.client.model.PerfilCliente;
+import com.vet_saas.modules.client.repository.ClienteRepository;
+
 @Service
 @RequiredArgsConstructor
 public class PetService {
@@ -26,6 +30,8 @@ public class PetService {
     private final MascotaRepository mascotaRepository;
     private final EmpresaRepository empresaRepository;
     private final SubscriptionService subscriptionService;
+    private final PointsService pointsService;
+    private final ClienteRepository clienteRepository;
 
     @Transactional
     public PetResponse createPet(Usuario usuario, CreatePetDto dto, String fotoUrl) {
@@ -56,6 +62,22 @@ public class PetService {
                 .build();
 
         Mascota saved = mascotaRepository.save(mascota);
+        
+        // Grant logic for First Pet (Gamification)
+        if (usuario.getRol() == Role.CLIENTE) {
+            try {
+                // If the user only has 1 active pet, it means this is their first
+                long currentCount = mascotaRepository.countByUsuarioIdAndActivoTrue(usuario.getId());
+                if (currentCount == 1) {
+                    clienteRepository.findByUsuarioId(usuario.getId()).ifPresent(perfil -> {
+                        pointsService.addPoints(perfil.getId(), "PRIMERA_MASCOTA", saved.getId(), "Bono por registrar tu primera mascota: " + saved.getNombre());
+                    });
+                }
+            } catch (Exception e) {
+                 System.err.println("Error granting first pet points: " + e.getMessage());
+            }
+        }
+
         return mapToResponse(saved);
     }
 

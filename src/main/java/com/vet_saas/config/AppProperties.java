@@ -32,8 +32,15 @@ public class AppProperties {
         private ApiPeruProps apiPeru = new ApiPeruProps();
         private MercadoPagoProps mercadoPago = new MercadoPagoProps();
         private MailProps mail = new MailProps();
+        private ResendProps resend = new ResendProps();
         private String backendUrl;
         private String frontendUrl;
+    }
+
+    @Data
+    public static class ResendProps {
+        private String apiKey;
+        private String fromEmail = "hola@huella360.com";
     }
 
     @Data

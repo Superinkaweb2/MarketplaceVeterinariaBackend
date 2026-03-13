@@ -17,12 +17,15 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.vet_saas.modules.points.service.PointsService;
+
 @Service
 @RequiredArgsConstructor
 public class ClienteService {
 
     private final ClienteRepository clienteRepository;
     private final EmpresaRepository empresaRepository;
+    private final PointsService pointsService;
 
     /**
      * Crear perfil de cliente para el usuario autenticado (rol CLIENTE).
@@ -44,7 +47,17 @@ public class ClienteService {
                 .pais(dto.pais() != null ? dto.pais() : "Perú")
                 .build();
 
-        return mapToResponse(clienteRepository.save(perfil));
+        perfil = clienteRepository.save(perfil);
+        
+        // Grant Points on Registration
+        try {
+            pointsService.addPoints(perfil.getId(), "REGISTRO", null, "Bono de bienvenida por registro");
+        } catch (Exception e) {
+            // Log error but don't fail profile creation
+            System.err.println("Error granting registration points: " + e.getMessage());
+        }
+
+        return mapToResponse(perfil);
     }
 
     /**

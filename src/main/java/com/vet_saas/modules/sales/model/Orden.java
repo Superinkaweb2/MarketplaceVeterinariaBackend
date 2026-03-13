@@ -56,6 +56,9 @@ public class Orden {
 
     @Column(nullable = false, precision = 10, scale = 2)
     private BigDecimal total;
+    
+    @Column(precision = 10, scale = 2)
+    private BigDecimal descuento;
 
     @Enumerated(EnumType.STRING)
     @JdbcTypeCode(SqlTypes.NAMED_ENUM)
@@ -87,6 +90,8 @@ public class Orden {
             costoEnvio = BigDecimal.ZERO;
         if (comisionPlataforma == null)
             comisionPlataforma = BigDecimal.ZERO;
+        if (descuento == null)
+            descuento = BigDecimal.ZERO;
 
         // Validar que tenga al menos un vendor
         if (empresa == null && veterinario == null) {
