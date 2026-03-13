@@ -114,7 +114,7 @@ public class RepartidorService {
 
         return deliveryRepository.findByRepartidorIdRepartidorAndEstadoNotIn(
             repartidor.getIdRepartidor(),
-            List.of(DeliveryStatus.ENTREGADO, DeliveryStatus.CANCELADO, DeliveryStatus.FALLIDO)
+            List.of(DeliveryStatus.ENTREGADO, DeliveryStatus.CANCELADO, DeliveryStatus.FALLIDO, DeliveryStatus.INCIDENCIA)
         ).map(deliveryMapper::toResponseDTO).orElse(null);
     }
 

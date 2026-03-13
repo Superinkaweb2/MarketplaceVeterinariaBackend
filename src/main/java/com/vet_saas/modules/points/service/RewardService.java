@@ -54,8 +54,8 @@ public class RewardService {
                 .activo(true)
                 .build();
 
-        if (Boolean.TRUE.equals(dto.getAplicaACiertosProductos()) && dto.getProductosIds() != null) {
-            List<Producto> productos = productoRepository.findAllById(dto.getProductosIds());
+        if (Boolean.TRUE.equals(dto.getAplicaACiertosProductos()) && dto.getProductosAplicablesIds() != null) {
+            List<Producto> productos = productoRepository.findAllById(dto.getProductosAplicablesIds());
             recompensa.setProductos(new HashSet<>(productos));
         }
 
@@ -75,15 +75,41 @@ public class RewardService {
 
     @Transactional
     public void deactivateReward(Long idRecompensa, Long idEmpresa) {
+        Recompensa recompensa = getRecompensaAndVerifyOwnership(idRecompensa, idEmpresa);
+        recompensa.setActivo(false);
+        recompensaRepository.save(recompensa);
+    }
+
+    @Transactional
+    public RewardDto updateReward(Long idRecompensa, Long idEmpresa, CreateRewardDto dto) {
+        Recompensa recompensa = getRecompensaAndVerifyOwnership(idRecompensa, idEmpresa);
+
+        recompensa.setTitulo(dto.getTitulo());
+        recompensa.setDescripcion(dto.getDescripcion());
+        recompensa.setCostoPuntos(dto.getCostoPuntos());
+        recompensa.setTipoDescuento(dto.getTipoDescuento());
+        recompensa.setValorDescuento(dto.getValorDescuento());
+        recompensa.setAplicaACiertosProductos(dto.getAplicaACiertosProductos() != null ? dto.getAplicaACiertosProductos() : false);
+
+        if (Boolean.TRUE.equals(recompensa.getAplicaACiertosProductos()) && dto.getProductosAplicablesIds() != null) {
+            List<Producto> productos = productoRepository.findAllById(dto.getProductosAplicablesIds());
+            recompensa.setProductos(new HashSet<>(productos));
+        } else {
+            recompensa.getProductos().clear();
+        }
+
+        recompensa = recompensaRepository.save(recompensa);
+        return mapToDto(recompensa);
+    }
+
+    private Recompensa getRecompensaAndVerifyOwnership(Long idRecompensa, Long idEmpresa) {
         Recompensa recompensa = recompensaRepository.findById(idRecompensa)
                 .orElseThrow(() -> new RuntimeException("Recompensa no encontrada"));
 
         if (!recompensa.getEmpresa().getId().equals(idEmpresa)) {
             throw new RuntimeException("No tiene permisos para modificar esta recompensa");
         }
-
-        recompensa.setActivo(false);
-        recompensaRepository.save(recompensa);
+        return recompensa;
     }
 
     @Transactional
@@ -155,6 +181,7 @@ public class RewardService {
                 .valorDescuento(entity.getValorDescuento())
                 .aplicaACiertosProductos(entity.getAplicaACiertosProductos())
                 .activo(entity.getActivo())
+                .totalCanjes((int) canjeRepository.countByRecompensa_Id(entity.getId()))
                 .productosAplicablesIds(entity.getProductos() != null ? 
                     entity.getProductos().stream().map(Producto::getId).collect(Collectors.toList()) : null)
                 .build();

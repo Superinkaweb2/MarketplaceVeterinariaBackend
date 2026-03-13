@@ -13,4 +13,5 @@ public interface CanjeRecompensaRepository extends JpaRepository<CanjeRecompensa
     Page<CanjeRecompensa> findByPuntosCliente_Id(Long idPerfil, Pageable pageable);
     Page<CanjeRecompensa> findByPuntosCliente_IdAndUtilizadoFalse(Long idPerfil, Pageable pageable);
     List<CanjeRecompensa> findByPuntosCliente_IdAndUtilizadoFalseAndRecompensa_Empresa_Id(Long idPerfil, Long idEmpresa);
+    long countByRecompensa_Id(Long idRecompensa);
 }

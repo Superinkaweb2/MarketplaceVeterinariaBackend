@@ -24,6 +24,7 @@ public class OrderResponseDto {
         private BigDecimal costoEnvio;
         private BigDecimal comisionPlataforma;
         private BigDecimal total;
+        private BigDecimal descuento;
         private EstadoOrden estado;
         private String metodoPago;
         private LocalDateTime createdAt;
@@ -42,6 +43,7 @@ public class OrderResponseDto {
                                 .costoEnvio(orden.getCostoEnvio())
                                 .comisionPlataforma(orden.getComisionPlataforma())
                                 .total(orden.getTotal())
+                                .descuento(orden.getDescuento())
                                 .estado(orden.getEstado())
                                 .metodoPago(orden.getMetodoPago())
                                 .createdAt(orden.getCreatedAt())

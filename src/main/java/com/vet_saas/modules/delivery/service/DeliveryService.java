@@ -18,6 +18,7 @@ import com.vet_saas.modules.delivery.repository.RepartidorRepository;
 import com.vet_saas.modules.notification.service.EmailService;
 import com.vet_saas.modules.points.service.PointsService;
 import com.vet_saas.modules.client.repository.ClienteRepository;
+import com.vet_saas.modules.sales.model.EstadoOrden;
 import com.vet_saas.modules.sales.model.Orden;
 import com.vet_saas.modules.user.repository.UsuarioRepository;
 import lombok.RequiredArgsConstructor;
@@ -136,7 +137,7 @@ public class DeliveryService {
         // Verificar que no tenga otro delivery activo
         boolean tieneActivo = deliveryRepository.existsByRepartidorIdAndEstadoNotIn(
             repartidor.getIdRepartidor(), 
-            List.of(DeliveryStatus.ENTREGADO, DeliveryStatus.FALLIDO, DeliveryStatus.CANCELADO)
+            List.of(DeliveryStatus.ENTREGADO, DeliveryStatus.FALLIDO, DeliveryStatus.CANCELADO, DeliveryStatus.INCIDENCIA)
         );
         if (tieneActivo) {
             throw new BusinessException("Ya tienes un delivery en curso. Termínalo antes de tomar otro.");
@@ -332,6 +333,112 @@ public class DeliveryService {
         deliveryRepository.save(delivery);
         cambiarEstado(deliveryId, DeliveryStatus.FALLIDO, repartidorId,
             "Intento fallido: " + (motivo != null ? motivo : "Nadie recibió el pedido"));
+    }
+
+    // =========================================================
+    // REPORTE DE INCIDENCIA (Accidente, Robo, etc.)
+    // =========================================================
+    @Transactional
+    public void reportarIncidencia(Long deliveryId, String motivo, String descripcion, MultipartFile foto, Long usuarioId) {
+        Delivery delivery = deliveryRepository.findById(deliveryId)
+            .orElseThrow(() -> new ResourceNotFoundException("Delivery no encontrado: " + deliveryId));
+
+        // Resolver el perfil del repartidor a partir del ID de usuario (JWT subject)
+        Repartidor repartidor = repartidorRepository.findByUsuarioId(usuarioId)
+            .orElseThrow(() -> new ResourceNotFoundException("Perfil de repartidor no encontrado para usuario: " + usuarioId));
+        Long repartidorId = repartidor.getIdRepartidor();
+
+        if (delivery.getRepartidor() == null ||
+                !delivery.getRepartidor().getIdRepartidor().equals(repartidorId)) {
+            throw new BusinessException("No autorizado para reportar incidencia en este delivery");
+        }
+
+        if (delivery.getEstado().esFinal()) {
+            throw new BusinessException("No se puede reportar incidencia en un delivery finalizado");
+        }
+
+        // Subir foto de evidencia si existe
+        if (foto != null && !foto.isEmpty()) {
+            String fotoUrl = cloudinaryService.uploadFile(foto, CLOUDINARY_FOLDER_DELIVERY + "/incidencias");
+            delivery.setFotoEntregaUrl(fotoUrl);
+        }
+
+        String logMsg = "Incidencia reportada: " + motivo + ". " + descripcion;
+        
+        // LÓGICA BIFURCADA
+        if (delivery.getEstado().ordinal() < DeliveryStatus.RECOGIDO.ordinal()) {
+            // ANTES DE RECOGER: Se libera el pedido para otro repartidor
+            log.info("Incidencia antes de recoger para delivery {}. Reiniciando búsqueda.", deliveryId);
+            
+            delivery.setEstado(DeliveryStatus.BUSCANDO_REPARTIDOR);
+            delivery.setRepartidor(null);
+            deliveryRepository.save(delivery);
+            
+            registrarEstado(delivery, DeliveryStatus.BUSCANDO_REPARTIDOR, logMsg, repartidorId);
+            
+            // Notificar al pool nuevamente
+            wsTemplate.convertAndSend("/topic/pedidos-disponibles", deliveryMapper.toResponseDTO(delivery));
+            wsTemplate.convertAndSend("/topic/delivery/" + deliveryId + "/estado", "BUSCANDO_REPARTIDOR");
+        } else {
+            // DESPUÉS DE RECOGER: La orden falla porque el producto ya se perdió/dañó
+            log.info("Incidencia después de recoger para delivery {}. Marcando orden como FALLIDA.", deliveryId);
+            
+            delivery.setEstado(DeliveryStatus.INCIDENCIA);
+            delivery.getOrden().setEstado(EstadoOrden.FALLIDO);
+            deliveryRepository.save(delivery);
+            
+            registrarEstado(delivery, DeliveryStatus.INCIDENCIA, logMsg, repartidorId);
+            
+            wsTemplate.convertAndSend("/topic/delivery/" + deliveryId + "/estado", "INCIDENCIA");
+        }
+
+        // En cualquier caso, liberar al repartidor actual
+        repartidorRepository.actualizarEstado(repartidorId, RepartidorStatus.DISPONIBLE);
+    }
+
+    /**
+     * Permite a la empresa reiniciar un delivery que falló o tuvo incidencia.
+     * Pone el estado en BUSCANDO_REPARTIDOR y limpia el repartidor anterior.
+     */
+    @Transactional
+    public DeliveryResponseDTO reintentarDelivery(Long deliveryId, Long usuarioId) {
+        Delivery delivery = deliveryRepository.findById(deliveryId)
+            .orElseThrow(() -> new ResourceNotFoundException("Delivery no encontrado: " + deliveryId));
+
+        return reintentarInternal(delivery, usuarioId);
+    }
+
+    @Transactional
+    public DeliveryResponseDTO reintentarDeliveryByOrder(Long ordenId, Long usuarioId) {
+        Delivery delivery = deliveryRepository.findByOrdenId(ordenId)
+            .orElseThrow(() -> new ResourceNotFoundException("No se encontró delivery para la orden: " + ordenId));
+
+        return reintentarInternal(delivery, usuarioId);
+    }
+
+    private DeliveryResponseDTO reintentarInternal(Delivery delivery, Long usuarioId) {
+        // Validar que el usuario sea el dueño de la empresa del origen (o admin)
+        // Por simplicidad en este MVP validamos que el delivery esté en estado final no exitoso
+        if (delivery.getEstado() != DeliveryStatus.FALLIDO && delivery.getEstado() != DeliveryStatus.INCIDENCIA) {
+            throw new BusinessException("Solo se pueden reintentar pedidos fallidos o con incidencia");
+        }
+
+        log.info("Reiniciando delivery para orden {} por solicitud de empresa/admin", delivery.getOrden().getId());
+
+        delivery.setEstado(DeliveryStatus.BUSCANDO_REPARTIDOR);
+        delivery.setRepartidor(null);
+        delivery.setFotoEntregaUrl(null);
+        // Regresar la orden a estado PAGADO (estaba en FALLIDO)
+        delivery.getOrden().setEstado(EstadoOrden.PAGADO);
+        
+        deliveryRepository.save(delivery);
+        registrarEstado(delivery, DeliveryStatus.BUSCANDO_REPARTIDOR, "Reintento de envío solicitado", usuarioId);
+
+        // Notificar al pool
+        wsTemplate.convertAndSend("/topic/pedidos-disponibles", deliveryMapper.toResponseDTO(delivery));
+        wsTemplate.convertAndSend("/topic/delivery/" + delivery.getId() + "/estado", "BUSCANDO_REPARTIDOR");
+
+        return deliveryMapper.toResponseDTO(delivery);
     }
 
     // =========================================================

@@ -46,6 +46,14 @@ public class RewardController {
         return ResponseEntity.ok(ApiResponse.success(result, "Recompensas de la empresa"));
     }
 
+    @PutMapping("/company/{id}")
+    @PreAuthorize("hasRole('EMPRESA')")
+    public ResponseEntity<ApiResponse<RewardDto>> updateReward(@PathVariable Long id, @Valid @RequestBody CreateRewardDto dto, Principal principal) {
+        Long idEmpresa = getEmpresaId(principal);
+        RewardDto response = rewardService.updateReward(id, idEmpresa, dto);
+        return ResponseEntity.ok(ApiResponse.success(response, "Recompensa actualizada exitosamente"));
+    }
+
     @DeleteMapping("/company/{id}")
     @PreAuthorize("hasRole('EMPRESA')")
     public ResponseEntity<ApiResponse<Void>> deactivateReward(@PathVariable Long id, Principal principal) {

@@ -23,17 +23,20 @@ import com.vet_saas.modules.veterinarian.repository.VeterinarioRepository;
 import lombok.RequiredArgsConstructor;
 import com.vet_saas.modules.points.service.PointsService;
 import com.vet_saas.modules.points.service.RewardService;
-import com.vet_saas.modules.client.model.PerfilCliente;
 import com.vet_saas.modules.client.repository.ClienteRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.data.jpa.domain.Specification;
+import jakarta.persistence.criteria.Predicate;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 
 @Service
 @RequiredArgsConstructor
@@ -50,18 +53,51 @@ public class OrderService {
     private final RewardService rewardService;
 
     @Transactional(readOnly = true)
-    public Page<OrderResponseDto> getMyOrders(Usuario usuario, Pageable pageable) {
-        Page<Orden> orders;
+    public Page<OrderResponseDto> getMyOrdersFiltered(Usuario usuario, EstadoOrden estado, String codigoOrden, String startDate, String endDate, Pageable pageable) {
+        Specification<Orden> spec = (root, query, cb) -> {
+            List<Predicate> predicates = new ArrayList<>();
 
-        if (usuario.getRol() == Role.EMPRESA) {
-            Empresa empresa = empresaRepository.findByUsuarioPropietarioId(usuario.getId())
-                    .orElseThrow(() -> new ResourceNotFoundException("Empresa no encontrada"));
-            orders = ordenRepository.findByEmpresaId(empresa.getId(), pageable);
-        } else {
-            orders = ordenRepository.findByUsuarioClienteId(usuario.getId(), pageable);
-        }
+            // Filtro por rol (Empresa o Cliente)
+            if (usuario.getRol() == Role.EMPRESA) {
+                Empresa empresa = empresaRepository.findByUsuarioPropietarioId(usuario.getId())
+                        .orElseThrow(() -> new ResourceNotFoundException("Empresa no encontrada"));
+                predicates.add(cb.equal(root.get("empresa").get("id"), empresa.getId()));
+            } else {
+                predicates.add(cb.equal(root.get("usuarioCliente").get("id"), usuario.getId()));
+            }
 
-        return orders.map(OrderResponseDto::fromEntity);
+            // Filtro por estado
+            if (estado != null) {
+                predicates.add(cb.equal(root.get("estado"), estado));
+            }
+
+            // Filtro por código de orden
+            if (codigoOrden != null && !codigoOrden.isBlank()) {
+                predicates.add(cb.like(cb.lower(root.get("codigoOrden")), "%" + codigoOrden.toLowerCase() + "%"));
+            }
+
+            // Filtro por rango de fechas
+            if (startDate != null && !startDate.isBlank()) {
+                try {
+                    LocalDateTime start = LocalDateTime.parse(startDate + "T00:00:00");
+                    predicates.add(cb.greaterThanOrEqualTo(root.get("createdAt"), start));
+                } catch (Exception e) {
+                    // Ignorar error de parseo
+                }
+            }
+            if (endDate != null && !endDate.isBlank()) {
+                try {
+                    LocalDateTime end = LocalDateTime.parse(endDate + "T23:59:59");
+                    predicates.add(cb.lessThanOrEqualTo(root.get("createdAt"), end));
+                } catch (Exception e) {
+                    // Ignorar error de parseo
+                }
+            }
+
+            return cb.and(predicates.toArray(new Predicate[0]));
+        };
+
+        return ordenRepository.findAll(spec, pageable).map(OrderResponseDto::fromEntity);
     }
 
     @Transactional
@@ -191,7 +227,7 @@ public class OrderService {
                         // Aplicar solo a productos elegibles
                         for (DetalleOrden detalle : orden.getDetalles()) {
                             if (detalle.getProducto() != null && recompensa.getProductos().stream()
-                                    .anyMatch(p -> p.getId().equals(detalle.getProducto().getId()))) {
+                                     .anyMatch(p -> p.getId().equals(detalle.getProducto().getId()))) {
                                 BigDecimal descItem = detalle.getSubtotal()
                                     .multiply(recompensa.getValorDescuento())
                                     .divide(new BigDecimal("100"), 2, java.math.RoundingMode.HALF_UP);
@@ -201,8 +237,8 @@ public class OrderService {
                     } else {
                         // Aplicar a toda la orden
                         descuentoTotal = subtotalGeneral
-                            .multiply(recompensa.getValorDescuento())
-                            .divide(new BigDecimal("100"), 2, java.math.RoundingMode.HALF_UP);
+                             .multiply(recompensa.getValorDescuento())
+                             .divide(new BigDecimal("100"), 2, java.math.RoundingMode.HALF_UP);
                     }
                 } else if ("MONTO_FIJO".equals(recompensa.getTipoDescuento())) {
                     descuentoTotal = recompensa.getValorDescuento();

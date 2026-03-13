@@ -73,19 +73,21 @@ public class RepartidorController {
     /** Perfil del repartidor autenticado */
     @GetMapping("/me")
     @PreAuthorize("hasRole('REPARTIDOR')")
-    public ResponseEntity<RepartidorResponseDTO> getMiPerfil(
+    public ResponseEntity<ApiResponse<RepartidorResponseDTO>> getMiPerfil(
             @AuthenticationPrincipal Usuario principal) {
-        return ResponseEntity.ok(repartidorService.getByUsuarioId(principal.getId()));
+        return ResponseEntity.ok(ApiResponse.success(
+                repartidorService.getByUsuarioId(principal.getId()),
+                "Perfil del repartidor recuperado"));
     }
 
     /** El repartidor activa o desactiva su disponibilidad */
     @PatchMapping("/me/disponibilidad")
     @PreAuthorize("hasRole('REPARTIDOR')")
-    public ResponseEntity<Void> cambiarDisponibilidad(
+    public ResponseEntity<ApiResponse<Void>> cambiarDisponibilidad(
             @RequestParam boolean disponible,
             @AuthenticationPrincipal Usuario principal) {
         repartidorService.cambiarDisponibilidad(principal.getId(), disponible);
-        return ResponseEntity.ok().build();
+        return ResponseEntity.ok(ApiResponse.success(null, "Disponibilidad actualizada"));
     }
 
     /**
@@ -94,27 +96,29 @@ public class RepartidorController {
      */
     @PatchMapping("/me/ubicacion")
     @PreAuthorize("hasRole('REPARTIDOR')")
-    public ResponseEntity<Void> actualizarUbicacion(
+    public ResponseEntity<ApiResponse<Void>> actualizarUbicacion(
             @Valid @RequestBody UbicacionDTO dto,
             @AuthenticationPrincipal Usuario principal) {
         repartidorService.actualizarUbicacion(principal.getId(), dto);
-        return ResponseEntity.ok().build();
+        return ResponseEntity.ok(ApiResponse.success(null, "Ubicación actualizada"));
     }
 
     /** Delivery activo actual del repartidor */
     @GetMapping("/me/delivery-activo")
     @PreAuthorize("hasRole('REPARTIDOR')")
-    public ResponseEntity<DeliveryResponseDTO> getDeliveryActivo(
+    public ResponseEntity<ApiResponse<DeliveryResponseDTO>> getDeliveryActivo(
             @AuthenticationPrincipal Usuario principal) {
         DeliveryResponseDTO activo = repartidorService.getDeliveryActivo(principal.getId());
-        return activo != null ? ResponseEntity.ok(activo) : ResponseEntity.noContent().build();
+        return ResponseEntity.ok(ApiResponse.success(activo, "Delivery activo recuperado"));
     }
 
     /** Historial de entregas del repartidor */
     @GetMapping("/me/historial")
     @PreAuthorize("hasRole('REPARTIDOR')")
-    public ResponseEntity<List<DeliveryResponseDTO>> getHistorial(
+    public ResponseEntity<ApiResponse<List<DeliveryResponseDTO>>> getHistorial(
             @AuthenticationPrincipal Usuario principal) {
-        return ResponseEntity.ok(repartidorService.getHistorial(principal.getId()));
+        return ResponseEntity.ok(ApiResponse.success(
+                repartidorService.getHistorial(principal.getId()),
+                "Historial recuperado"));
     }
 }

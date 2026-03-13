@@ -35,5 +35,5 @@ public class CreateRewardDto {
 
     private Boolean aplicaACiertosProductos;
 
-    private List<Long> productosIds; // if aplicaACiertosProductos is true
+    private List<Long> productosAplicablesIds; // if aplicaACiertosProductos is true
 }
