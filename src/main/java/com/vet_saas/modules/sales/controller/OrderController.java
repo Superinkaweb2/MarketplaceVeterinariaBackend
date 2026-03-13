@@ -3,6 +3,7 @@ package com.vet_saas.modules.sales.controller;
 import com.vet_saas.core.response.ApiResponse;
 import com.vet_saas.modules.sales.dto.CreateOrderDto;
 import com.vet_saas.modules.sales.dto.OrderResponseDto;
+import com.vet_saas.modules.sales.model.EstadoOrden;
 import com.vet_saas.modules.sales.service.OrderService;
 import com.vet_saas.modules.user.model.Usuario;
 import jakarta.validation.Valid;
@@ -29,14 +30,14 @@ public class OrderController {
 
     @GetMapping("/me")
     public ResponseEntity<ApiResponse<Page<OrderResponseDto>>> getMyOrders(
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(required = false) EstadoOrden estado,
+            @RequestParam(required = false) String codigoOrden,
             @RequestParam(required = false) String startDate,
             @RequestParam(required = false) String endDate,
             @AuthenticationPrincipal Usuario usuario,
             Pageable pageable) {
         return ResponseEntity.ok(
-                ApiResponse.success(orderService.getMyOrders(usuario, pageable),
+                ApiResponse.success(orderService.getMyOrdersFiltered(usuario, estado, codigoOrden, startDate, endDate, pageable),
                         "Tus órdenes recuperadas exitosamente"));
     }
 }

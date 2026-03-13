@@ -15,8 +15,10 @@ import java.time.LocalDateTime;
 import java.util.Optional;
 import com.vet_saas.modules.sales.model.EstadoOrden;
 
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+
 @Repository
-public interface OrdenRepository extends JpaRepository<Orden, Long> {
+public interface OrdenRepository extends JpaRepository<Orden, Long>, JpaSpecificationExecutor<Orden> {
 
         Page<Orden> findByUsuarioClienteId(Long usuarioId, Pageable pageable);
 

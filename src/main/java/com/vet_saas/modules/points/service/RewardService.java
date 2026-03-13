@@ -54,8 +54,8 @@ public class RewardService {
                 .activo(true)
                 .build();
 
-        if (Boolean.TRUE.equals(dto.getAplicaACiertosProductos()) && dto.getProductosIds() != null) {
-            List<Producto> productos = productoRepository.findAllById(dto.getProductosIds());
+        if (Boolean.TRUE.equals(dto.getAplicaACiertosProductos()) && dto.getProductosAplicablesIds() != null) {
+            List<Producto> productos = productoRepository.findAllById(dto.getProductosAplicablesIds());
             recompensa.setProductos(new HashSet<>(productos));
         }
 
@@ -91,8 +91,8 @@ public class RewardService {
         recompensa.setValorDescuento(dto.getValorDescuento());
         recompensa.setAplicaACiertosProductos(dto.getAplicaACiertosProductos() != null ? dto.getAplicaACiertosProductos() : false);
 
-        if (Boolean.TRUE.equals(recompensa.getAplicaACiertosProductos()) && dto.getProductosIds() != null) {
-            List<Producto> productos = productoRepository.findAllById(dto.getProductosIds());
+        if (Boolean.TRUE.equals(recompensa.getAplicaACiertosProductos()) && dto.getProductosAplicablesIds() != null) {
+            List<Producto> productos = productoRepository.findAllById(dto.getProductosAplicablesIds());
             recompensa.setProductos(new HashSet<>(productos));
         } else {
             recompensa.getProductos().clear();

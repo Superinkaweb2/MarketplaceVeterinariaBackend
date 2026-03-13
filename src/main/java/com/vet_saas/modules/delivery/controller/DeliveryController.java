@@ -4,11 +4,13 @@ import com.vet_saas.core.response.ApiResponse;
 import com.vet_saas.modules.delivery.dto.request.CalificacionDTO;
 import com.vet_saas.modules.delivery.dto.request.CambiarEstadoDTO;
 import com.vet_saas.modules.delivery.dto.request.ConfirmarOTPDTO;
+import com.vet_saas.modules.delivery.dto.request.ReportarIncidenciaDTO;
 import com.vet_saas.modules.delivery.dto.response.DeliveryResponseDTO;
 import com.vet_saas.modules.delivery.service.DeliveryService;
 import com.vet_saas.modules.user.model.Usuario;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -98,6 +100,42 @@ public class DeliveryController {
             @AuthenticationPrincipal Usuario principal) {
         deliveryService.reportarIntentoFallido(deliveryId, foto, motivo, principal.getId());
         return ResponseEntity.ok(ApiResponse.success(null, "Intento fallido reportado"));
+    }
+
+    /** Reportar incidencia (Accidente, Robo, Falla Mecánica) */
+    @PostMapping(value = "/{deliveryId}/incidencia", consumes = "multipart/form-data")
+    @PreAuthorize("hasRole('REPARTIDOR')")
+    public ResponseEntity<ApiResponse<Void>> reportarIncidencia(
+            @PathVariable Long deliveryId,
+            @RequestPart("data") @Valid ReportarIncidenciaDTO dto,
+            @RequestPart(value = "foto", required = false) MultipartFile foto,
+            @AuthenticationPrincipal Usuario principal) {
+        deliveryService.reportarIncidencia(deliveryId, dto.getMotivo(), dto.getDescripcion(), foto, principal.getId());
+        return ResponseEntity.ok(ApiResponse.success(null, "Incidencia reportada correctamente"));
+    }
+
+    /** Reiniciar un delivery que falló o tuvo incidencia (Solo Empresa/Admin) */
+    @PostMapping("/{deliveryId}/reintentar")
+    @PreAuthorize("hasAnyRole('EMPRESA', 'ADMIN')")
+    public ResponseEntity<ApiResponse<DeliveryResponseDTO>> reintentar(
+            @PathVariable Long deliveryId,
+            @AuthenticationPrincipal Usuario usuario) {
+        return ResponseEntity.ok(ApiResponse.success(
+            deliveryService.reintentarDelivery(deliveryId, usuario.getId()), 
+            "Delivery reiniciado correctamente")
+        );
+    }
+
+    /** Reiniciar un delivery por ID de orden (Solo Empresa/Admin) */
+    @PostMapping("/orden/{ordenId}/reintentar")
+    @PreAuthorize("hasAnyRole('EMPRESA', 'ADMIN')")
+    public ResponseEntity<ApiResponse<DeliveryResponseDTO>> reintentarByOrder(
+            @PathVariable Long ordenId,
+            @AuthenticationPrincipal Usuario usuario) {
+        return ResponseEntity.ok(ApiResponse.success(
+            deliveryService.reintentarDeliveryByOrder(ordenId, usuario.getId()), 
+            "Delivery reiniciado correctamente")
+        );
     }
 
     /** Repartidor ve el pool de pedidos disponibles */
