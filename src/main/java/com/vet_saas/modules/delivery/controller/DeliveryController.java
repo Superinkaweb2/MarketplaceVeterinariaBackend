@@ -1,5 +1,6 @@
 package com.vet_saas.modules.delivery.controller;
 
+import com.vet_saas.core.response.ApiResponse;
 import com.vet_saas.modules.delivery.dto.request.CalificacionDTO;
 import com.vet_saas.modules.delivery.dto.request.CambiarEstadoDTO;
 import com.vet_saas.modules.delivery.dto.request.ConfirmarOTPDTO;
@@ -26,29 +27,29 @@ public class DeliveryController {
     /** Consultar el delivery de una orden (cliente ve estado + posicion del repartidor) */
     @GetMapping("/orden/{ordenId}")
     @PreAuthorize("hasRole('CLIENTE')")
-    public ResponseEntity<DeliveryResponseDTO> getByOrden(
+    public ResponseEntity<ApiResponse<DeliveryResponseDTO>> getByOrden(
             @PathVariable Long ordenId) {
-        return ResponseEntity.ok(deliveryService.getByOrdenId(ordenId));
+        return ResponseEntity.ok(ApiResponse.success(deliveryService.getByOrdenId(ordenId), "Delivery de la orden"));
     }
 
     /** El cliente califica al repartidor tras recibir su pedido */
     @PostMapping("/{deliveryId}/calificar")
     @PreAuthorize("hasRole('CLIENTE')")
-    public ResponseEntity<Void> calificar(
+    public ResponseEntity<ApiResponse<Void>> calificar(
             @PathVariable Long deliveryId,
             @Valid @RequestBody CalificacionDTO dto,
             @AuthenticationPrincipal Usuario principal) {
         deliveryService.calificarEntrega(deliveryId, dto, principal.getId());
-        return ResponseEntity.ok().build();
+        return ResponseEntity.ok(ApiResponse.success(null, "Calificación registrada"));
     }
 
     /** El cliente cancela su pedido (solo si no ha sido recogido) */
     @PostMapping("/{deliveryId}/cancelar")
     @PreAuthorize("hasRole('CLIENTE')")
-    public ResponseEntity<DeliveryResponseDTO> cancelar(
+    public ResponseEntity<ApiResponse<DeliveryResponseDTO>> cancelar(
             @PathVariable Long deliveryId,
             @AuthenticationPrincipal Usuario principal) {
-        return ResponseEntity.ok(deliveryService.cancelarDelivery(deliveryId, principal.getId()));
+        return ResponseEntity.ok(ApiResponse.success(deliveryService.cancelarDelivery(deliveryId, principal.getId()), "Delivery cancelado"));
     }
 
     // ---- Repartidor ----
@@ -56,63 +57,63 @@ public class DeliveryController {
     /** El repartidor cambia el estado del delivery (EN_TIENDA, RECOGIDO, EN_CAMINO, etc.) */
     @PatchMapping("/{deliveryId}/estado")
     @PreAuthorize("hasRole('REPARTIDOR')")
-    public ResponseEntity<DeliveryResponseDTO> cambiarEstado(
+    public ResponseEntity<ApiResponse<DeliveryResponseDTO>> cambiarEstado(
             @PathVariable Long deliveryId,
             @Valid @RequestBody CambiarEstadoDTO dto,
             @AuthenticationPrincipal Usuario principal) {
-        return ResponseEntity.ok(
+        return ResponseEntity.ok(ApiResponse.success(
             deliveryService.cambiarEstado(deliveryId, dto.getNuevoEstado(),
-                principal.getId(), dto.getDescripcion())
+                principal.getId(), dto.getDescripcion()), "Estado actualizado")
         );
     }
 
     /** Confirmar entrega con OTP que el cliente le dice al repartidor */
     @PostMapping("/{deliveryId}/confirmar-otp")
     @PreAuthorize("hasRole('REPARTIDOR')")
-    public ResponseEntity<Void> confirmarOTP(
+    public ResponseEntity<ApiResponse<Void>> confirmarOTP(
             @PathVariable Long deliveryId,
             @Valid @RequestBody ConfirmarOTPDTO dto) {
         deliveryService.confirmarEntregaOTP(deliveryId, dto);
-        return ResponseEntity.ok().build();
+        return ResponseEntity.ok(ApiResponse.success(null, "Entrega confirmada con OTP"));
     }
 
     /** Confirmar entrega con foto (cuando nadie abre o como evidencia adicional) */
     @PostMapping("/{deliveryId}/confirmar-foto")
     @PreAuthorize("hasRole('REPARTIDOR')")
-    public ResponseEntity<Void> confirmarFoto(
+    public ResponseEntity<ApiResponse<Void>> confirmarFoto(
             @PathVariable Long deliveryId,
             @RequestParam("foto") MultipartFile foto,
             @AuthenticationPrincipal Usuario principal) {
         deliveryService.confirmarEntregaFoto(deliveryId, foto, principal.getId());
-        return ResponseEntity.ok().build();
+        return ResponseEntity.ok(ApiResponse.success(null, "Entrega confirmada con foto"));
     }
 
     /** Reportar intento fallido (nadie abre la puerta) */
     @PostMapping("/{deliveryId}/intento-fallido")
     @PreAuthorize("hasRole('REPARTIDOR')")
-    public ResponseEntity<Void> intentoFallido(
+    public ResponseEntity<ApiResponse<Void>> intentoFallido(
             @PathVariable Long deliveryId,
             @RequestParam(value = "foto", required = false) MultipartFile foto,
             @RequestParam(value = "motivo", required = false) String motivo,
             @AuthenticationPrincipal Usuario principal) {
         deliveryService.reportarIntentoFallido(deliveryId, foto, motivo, principal.getId());
-        return ResponseEntity.ok().build();
+        return ResponseEntity.ok(ApiResponse.success(null, "Intento fallido reportado"));
     }
 
     /** Repartidor ve el pool de pedidos disponibles */
     @GetMapping("/disponibles")
     @PreAuthorize("hasRole('REPARTIDOR')")
-    public ResponseEntity<java.util.List<DeliveryResponseDTO>> getDisponibles() {
-        return ResponseEntity.ok(deliveryService.getPedidosDisponibles());
+    public ResponseEntity<ApiResponse<java.util.List<DeliveryResponseDTO>>> getDisponibles() {
+        return ResponseEntity.ok(ApiResponse.success(deliveryService.getPedidosDisponibles(), "Pedidos disponibles"));
     }
 
     /** Repartidor toma un pedido del pool */
     @PostMapping("/{deliveryId}/aceptar")
     @PreAuthorize("hasRole('REPARTIDOR')")
-    public ResponseEntity<DeliveryResponseDTO> aceptarPedido(
+    public ResponseEntity<ApiResponse<DeliveryResponseDTO>> aceptarPedido(
             @PathVariable Long deliveryId,
             @AuthenticationPrincipal Usuario principal) {
-        return ResponseEntity.ok(deliveryService.aceptarPedido(deliveryId, principal.getId()));
+        return ResponseEntity.ok(ApiResponse.success(deliveryService.aceptarPedido(deliveryId, principal.getId()), "Pedido aceptado"));
     }
 
     // ---- Empresa (dashboard) ----
@@ -120,15 +121,15 @@ public class DeliveryController {
     /** Ver detalle de un delivery específico */
     @GetMapping("/{deliveryId}")
     @PreAuthorize("hasAnyRole('EMPRESA', 'ADMIN', 'REPARTIDOR')")
-    public ResponseEntity<DeliveryResponseDTO> getById(@PathVariable Long deliveryId) {
-        return ResponseEntity.ok(deliveryService.getById(deliveryId));
+    public ResponseEntity<ApiResponse<DeliveryResponseDTO>> getById(@PathVariable Long deliveryId) {
+        return ResponseEntity.ok(ApiResponse.success(deliveryService.getById(deliveryId), "Detalle del delivery"));
     }
 
     /** Ver calificaciones recibidas por la empresa */
     @GetMapping("/empresa/ratings")
     @PreAuthorize("hasRole('EMPRESA')")
-    public ResponseEntity<java.util.List<DeliveryResponseDTO>> getRatingsByEmpresa(
+    public ResponseEntity<ApiResponse<java.util.List<DeliveryResponseDTO>>> getRatingsByEmpresa(
             @AuthenticationPrincipal Usuario principal) {
-        return ResponseEntity.ok(deliveryService.getRatingsByUsuarioEmpresa(principal.getId()));
+        return ResponseEntity.ok(ApiResponse.success(deliveryService.getRatingsByUsuarioEmpresa(principal.getId()), "Calificaciones de la empresa"));
     }
 }

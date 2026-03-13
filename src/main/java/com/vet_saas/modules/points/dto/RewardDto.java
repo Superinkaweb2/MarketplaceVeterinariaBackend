@@ -22,6 +22,7 @@ public class RewardDto {
     private BigDecimal valorDescuento;
     private Boolean aplicaACiertosProductos;
     private Boolean activo;
+    private Integer totalCanjes;
 
     private List<Long> productosAplicablesIds;
 }

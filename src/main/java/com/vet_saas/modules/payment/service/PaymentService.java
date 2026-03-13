@@ -118,6 +118,16 @@ public class PaymentService {
                         .build());
             }
 
+            if (orden.getDescuento() != null && orden.getDescuento().compareTo(BigDecimal.ZERO) > 0) {
+                items.add(PreferenceItemRequest.builder()
+                        .id("DESC-001")
+                        .title("Descuento (Cupón)")
+                        .quantity(1)
+                        .currencyId("PEN")
+                        .unitPrice(orden.getDescuento().negate())
+                        .build());
+            }
+
             boolean isSandbox = appProperties.getExternal().getMercadoPago().isSandbox();
             String payerEmail = null;
 
