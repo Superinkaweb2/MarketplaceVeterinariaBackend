@@ -4,6 +4,13 @@ spring:
   profiles:
     active: dev
 
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${AUTH0_ISSUER_URI}
+          audiences: ${AUTH0_AUDIENCE}
+
   datasource:
     url: ${DB_URL}
     username: ${DB_USERNAME}
@@ -37,15 +44,14 @@ spring:
           starttls:
             enable: true
 
-# Configuración personalizada
 app:
-  jwt:
-    secret: ${JWT_SECRET}
-    expiration: 3600000
-    refresh-expiration: 86400000
+  auth0:
+    audience: ${AUTH0_AUDIENCE}
+
   security:
     encryption:
       secret: ${APP_ENCRYPTION_SECRET}
+
   cors:
     allowed-origins: ${ALLOWED_ORIGINS:http://localhost:5173}
 
@@ -67,7 +73,7 @@ app:
       access-token: ${MP_ACCESS_TOKEN}
       client-id: ${MP_CLIENT_ID}
       client-secret: ${MP_CLIENT_SECRET}
-      sandbox-buyer-email: ${MP_SANDBOX_BUYER_EMAIL:}
+      sandbox-buyer-email: ${MP_SANDBOX_BUYER_EMAIL}
       sandbox: ${MP_SANDBOX:true}
 
     mail:
