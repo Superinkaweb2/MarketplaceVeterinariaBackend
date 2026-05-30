@@ -82,3 +82,4 @@ logging:
     root: INFO
     com.vet_saas: INFO
     org.springframework.security: INFO
+    org.springframework.data.repository.config.RepositoryConfigurationExtensionSupport: WARN
