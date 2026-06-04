@@ -4,6 +4,7 @@ import com.resend.Resend;
 import com.resend.core.exception.ResendException;
 import com.resend.services.emails.model.CreateEmailOptions;
 import com.resend.services.emails.model.CreateEmailResponse;
+import com.resend.services.emails.model.Attachment;
 import com.vet_saas.config.AppProperties;
 import com.vet_saas.modules.sales.model.Orden;
 import com.vet_saas.modules.sales.repository.OrdenRepository;
@@ -18,6 +19,7 @@ import org.thymeleaf.TemplateEngine;
 import org.thymeleaf.context.Context;
 
 import java.math.BigDecimal;
+import java.util.Arrays;
 
 @Service
 @RequiredArgsConstructor
@@ -52,6 +54,57 @@ public class EmailService {
             LOGGER.error("Resend API error sending email to {}: {}", to, ex.getMessage(), ex);
         } catch (Exception ex) {
             LOGGER.error("Unexpected error sending email to {}: {}", to, ex.getMessage(), ex);
+        }
+    }
+
+    private void sendEmailWithAttachment(String to, String subject, String htmlContent, String attachmentName, byte[] attachmentContent) {
+        try {
+            Resend resend = getResendClient();
+            String from = appProperties.getExternal().getResend().getFromEmail();
+
+            Attachment attachment = Attachment.builder()
+                    .fileName(attachmentName)
+                    .content(Arrays.toString(attachmentContent))
+                    .build();
+
+            com.resend.services.emails.model.CreateEmailOptions params = com.resend.services.emails.model.CreateEmailOptions.builder()
+                    .from(from)
+                    .to(to)
+                    .subject(subject)
+                    .html(htmlContent)
+                    .attachments(attachment)
+                    .build();
+
+            CreateEmailResponse response = resend.emails().send(params);
+            LOGGER.info("Email with attachment sent successfully via Resend. ID: {}", response.getId());
+        } catch (ResendException ex) {
+            LOGGER.error("Resend API error sending email with attachment to {}: {}", to, ex.getMessage(), ex);
+        } catch (Exception ex) {
+            LOGGER.error("Unexpected error sending email with attachment to {}: {}", to, ex.getMessage(), ex);
+        }
+    }
+
+    @Async("mailExecutor")
+    public void sendReclamoEmail(String emailDestino, String nombreCliente, String numeroReclamo, byte[] pdfContent) {
+        try {
+            Context context = new Context();
+            context.setVariable("nombreUsuario", nombreCliente);
+            context.setVariable("numeroReclamo", numeroReclamo);
+
+            // Podemos usar una plantilla genérica o crear un mensaje simple en HTML
+            String htmlContent = "<h2>Libro de Reclamaciones - HUELLA360</h2>" +
+                    "<p>Hola " + nombreCliente + ",</p>" +
+                    "<p>Hemos recibido tu " + numeroReclamo + ".</p>" +
+                    "<p>Adjunto encontrarás una copia en PDF de tu solicitud. Te contactaremos dentro del plazo legal establecido.</p>";
+
+            // Enviar al cliente
+            sendEmailWithAttachment(emailDestino, "Copia de tu Reclamo/Queja - HUELLA360", htmlContent, "Hoja_Reclamacion.pdf", pdfContent);
+            
+            // Enviar copia a administración
+            sendEmailWithAttachment("i202332157@cibertec.edu.pe", "NUEVO " + numeroReclamo + " - " + nombreCliente, htmlContent, "Hoja_Reclamacion.pdf", pdfContent);
+
+        } catch (Exception ex) {
+            LOGGER.error("Error preparing reclamo email: {}", ex.getMessage(), ex);
         }
     }
 
@@ -156,6 +209,34 @@ public class EmailService {
 
         } catch (Exception ex) {
             LOGGER.error("Error preparing reset email to {}: {}", usuario.getCorreo(), ex.getMessage(), ex);
+        }
+    }
+
+    @Async("mailExecutor")
+    public void sendReclamoEmailConLink(String emailDestino, String nombreCliente, String numeroReclamo, String pdfUrl) {
+        try {
+            // Construimos un diseño HTML limpio y profesional con el botón dinámico hacia Cloudinary
+            String htmlContent = "<h2>Libro de Reclamaciones Virtual</h2>" +
+                    "<p>Estimado(a) <strong>" + nombreCliente + "</strong>,</p>" +
+                    "<p>Le informamos que su solicitud en nuestro Libro de Reclamaciones ha sido registrada correctamente bajo el identificador: <strong>" + numeroReclamo + "</strong>.</p>" +
+                    "<p>Conforme a la normativa de protección al consumidor, adjuntamos el acceso directo para visualizar, guardar o descargar la copia electrónica oficial de su hoja de reclamación:</p>" +
+                    "<div style='margin: 25px 0;'>" +
+                    "  <a href='" + pdfUrl + "' target='_blank' style='background-color: #1ea59c; color: white; padding: 12px 20px; text-decoration: none; font-weight: bold; border-radius: 8px; display: inline-block;'>" +
+                    "    Ver Hoja de Reclamación (PDF)" +
+                    "  </a>" +
+                    "</div>" +
+                    "<p style='font-size: 12px; color: #666;'>De acuerdo a Ley, daremos respuesta formal a su requerimiento dentro del plazo establecido de quince (15) días hábiles.</p>" +
+                    "<hr style='border: 0; border-top: 1px solid #eee; margin-top: 30px;'>" +
+                    "<p style='font-size: 11px; color: #999;'>Este es un correo automático de notificación enviado por el sistema, por favor no responda a esta dirección.</p>";
+
+            // 1. Envío directo al cliente afectado
+            sendEmail(emailDestino, "Copia de tu Reclamo/Queja - HUELLA360", htmlContent);
+
+            // 2. Envío de copia administrativa a tu cuenta Sandbox autorizada de Resend
+            sendEmail("i202332157@cibertec.edu.pe", "Copia Administrativa: " + numeroReclamo + " - " + nombreCliente, htmlContent);
+
+        } catch (Exception ex) {
+            LOGGER.error("Error al preparar el correo electrónico del reclamo dinámico: {}", ex.getMessage(), ex);
         }
     }
 }
