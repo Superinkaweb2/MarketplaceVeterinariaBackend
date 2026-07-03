@@ -13,6 +13,7 @@ import com.vet_saas.modules.subscription.service.SubscriptionService;
 import com.vet_saas.modules.user.model.Role;
 import com.vet_saas.modules.user.model.Usuario;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -23,6 +24,7 @@ import com.vet_saas.modules.points.service.PointsService;
 import com.vet_saas.modules.client.model.PerfilCliente;
 import com.vet_saas.modules.client.repository.ClienteRepository;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class PetService {
@@ -74,7 +76,7 @@ public class PetService {
                     });
                 }
             } catch (Exception e) {
-                 System.err.println("Error granting first pet points: " + e.getMessage());
+                 log.error("Error granting first pet points: {}", e.getMessage());
             }
         }
 

@@ -9,7 +9,11 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.LocalDateTime;
+import java.util.Base64;
 import java.util.UUID;
 
 @Service
@@ -20,13 +24,14 @@ public class AuthTokenService {
 
     @Transactional
     public String createToken(Usuario usuario, TokenType tipo, int expirationHours) {
-        // Eliminar tokens previos del mismo tipo para este usuario
         authTokenRepository.deleteByUsuarioAndTipo(usuario, tipo);
 
         String tokenValue = UUID.randomUUID().toString();
+        String tokenHash = hashToken(tokenValue);
+
         AuthToken token = AuthToken.builder()
                 .usuario(usuario)
-                .token(tokenValue)
+                .tokenHash(tokenHash)
                 .tipo(tipo)
                 .fechaExpiracion(LocalDateTime.now().plusHours(expirationHours))
                 .build();
@@ -36,7 +41,8 @@ public class AuthTokenService {
     }
 
     public AuthToken validateToken(String tokenValue, TokenType tipo) {
-        AuthToken token = authTokenRepository.findByTokenAndTipo(tokenValue, tipo)
+        String tokenHash = hashToken(tokenValue);
+        AuthToken token = authTokenRepository.findByTokenHashAndTipo(tokenHash, tipo)
                 .orElseThrow(() -> new BusinessException("Token inválido o no encontrado"));
 
         if (token.isExpired()) {
@@ -50,5 +56,15 @@ public class AuthTokenService {
     @Transactional
     public void deleteToken(AuthToken token) {
         authTokenRepository.delete(token);
+    }
+
+    private String hashToken(String token) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] hash = digest.digest(token.getBytes(StandardCharsets.UTF_8));
+            return Base64.getEncoder().encodeToString(hash);
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("SHA-256 no disponible en este entorno", e);
+        }
     }
 }

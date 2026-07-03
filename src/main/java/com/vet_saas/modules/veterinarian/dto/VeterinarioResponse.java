@@ -14,6 +14,5 @@ public record VeterinarioResponse(
                 String fotoPerfilUrl,
                 VerificationStatus estadoValidacion,
                 String email,
-                String mpAccessToken,
                 String mpPublicKey) {
 }

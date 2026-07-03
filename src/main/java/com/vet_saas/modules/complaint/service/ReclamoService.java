@@ -2,6 +2,7 @@ package com.vet_saas.modules.complaint.service;
 
 import com.cloudinary.Cloudinary;
 import com.cloudinary.utils.ObjectUtils;
+import com.vet_saas.core.exceptions.types.BusinessException;
 import com.vet_saas.modules.complaint.dto.ReclamoRequestDto;
 import com.vet_saas.modules.complaint.model.Reclamo;
 import com.vet_saas.modules.complaint.repository.ReclamoRepository;
@@ -104,7 +105,7 @@ public class ReclamoService {
             return uploadResult.get("secure_url").toString();
         } catch (Exception e) {
             LOGGER.error("Error al subir el PDF de reclamo a Cloudinary: {}", e.getMessage(), e);
-            throw new RuntimeException("No se pudo guardar el documento generado", e);
+            throw new BusinessException("No se pudo guardar el documento generado");
         }
     }
 }

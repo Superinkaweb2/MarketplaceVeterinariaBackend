@@ -206,6 +206,7 @@ public class PaymentService {
 
         } catch (Exception ex) {
             LOGGER.error("Error crítico al procesar el pago {}", paymentId, ex);
+            throw ex;
         }
     }
 

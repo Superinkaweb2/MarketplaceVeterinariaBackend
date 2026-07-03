@@ -11,17 +11,20 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/api/v1/orders")
 @RequiredArgsConstructor
+@PreAuthorize("isAuthenticated()")
 public class OrderController {
 
     private final OrderService orderService;
 
     @PostMapping
+    @PreAuthorize("hasRole('CLIENTE')")
     public ResponseEntity<ApiResponse<Long>> createOrder(@RequestBody @Valid CreateOrderDto dto) {
         Long pedidoId = orderService.createOrder(dto);
         return ResponseEntity.ok(

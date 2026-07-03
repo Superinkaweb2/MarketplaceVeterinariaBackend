@@ -8,6 +8,8 @@ import com.vet_saas.modules.catalog.dto.CategoriaResponse;
 import com.vet_saas.modules.catalog.model.Categoria;
 import com.vet_saas.modules.catalog.repository.CategoriaRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -21,6 +23,7 @@ public class CategoriaService {
 
     private final CategoriaRepository categoriaRepository;
 
+    @Cacheable(value = "categorias", key = "'allActive'")
     @Transactional(readOnly = true)
     public List<CategoriaResponse> getAllActiveCategories() {
         return categoriaRepository.findByActivoTrueOrderByOrdenAsc().stream()
@@ -28,6 +31,7 @@ public class CategoriaService {
                 .collect(Collectors.toList());
     }
 
+    @Cacheable(value = "categorias", key = "'sub_' + #padreId")
     @Transactional(readOnly = true)
     public List<CategoriaResponse> getActiveSubcategories(Long padreId) {
         return categoriaRepository.findByPadreIdAndActivoTrueOrderByOrdenAsc(padreId).stream()
@@ -35,6 +39,7 @@ public class CategoriaService {
                 .collect(Collectors.toList());
     }
 
+    @CacheEvict(value = "categorias", allEntries = true)
     @Transactional
     public CategoriaResponse createCategory(CreateCategoriaRequest request) {
         String slug = generateSlug(request.nombre());
@@ -60,6 +65,7 @@ public class CategoriaService {
         return mapToResponse(categoriaRepository.save(categoria));
     }
 
+    @CacheEvict(value = "categorias", allEntries = true)
     @Transactional
     public CategoriaResponse updateCategory(Long id, UpdateCategoriaRequest request) {
         Categoria categoria = categoriaRepository.findById(id)
@@ -102,6 +108,7 @@ public class CategoriaService {
         return mapToResponse(categoriaRepository.save(categoria));
     }
 
+    @CacheEvict(value = "categorias", allEntries = true)
     @Transactional
     public void softDeleteCategory(Long id) {
         Categoria categoria = categoriaRepository.findByIdAndActivoTrue(id)

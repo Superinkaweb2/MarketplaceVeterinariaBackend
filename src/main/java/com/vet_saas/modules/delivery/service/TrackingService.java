@@ -1,5 +1,6 @@
 package com.vet_saas.modules.delivery.service;
 
+import com.vet_saas.core.exceptions.types.ResourceNotFoundException;
 import com.vet_saas.modules.delivery.dto.request.UbicacionDTO;
 import com.vet_saas.modules.delivery.dto.response.UbicacionEvent;
 import com.vet_saas.modules.delivery.model.Delivery;
@@ -38,7 +39,7 @@ public class TrackingService {
     @Transactional
     public UbicacionEvent procesarUbicacion(Long deliveryId, UbicacionDTO pos, Long repartidorId) {
         Delivery delivery = deliveryRepository.findById(deliveryId)
-            .orElseThrow(() -> new RuntimeException("Delivery no encontrado: " + deliveryId));
+            .orElseThrow(() -> new ResourceNotFoundException("Delivery", "id", deliveryId));
 
         // Actualizar ubicacion del repartidor (query optimizado, no UPDATE completo)
         repartidorRepository.actualizarUbicacion(repartidorId, pos.getLat(), pos.getLng());

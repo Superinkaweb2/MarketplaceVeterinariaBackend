@@ -10,9 +10,17 @@ import java.util.List;
 @Configuration
 @ConfigurationProperties(prefix = "app")
 public class AppProperties {
+    private Auth0 auth0 = new Auth0();
     private Jwt jwt = new Jwt();
     private Cors cors = new Cors();
     private External external = new External();
+    private Notification notification = new Notification();
+
+    @Data
+    public static class Auth0 {
+        private String issuer;
+        private String audience;
+    }
 
     @Data
     public static class Jwt {
@@ -63,11 +71,17 @@ public class AppProperties {
         private String clientSecret;
         private String sandboxBuyerEmail;
         private boolean sandbox = false;
+        private String webhookSecret;
     }
 
     @Data
     public static class MailProps {
         private String username;
         private String fromEmail;
+    }
+
+    @Data
+    public static class Notification {
+        private String adminEmail = "admin@huella360.com";
     }
 }

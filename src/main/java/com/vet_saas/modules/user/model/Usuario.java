@@ -36,7 +36,7 @@ public class Usuario implements UserDetails {
 
     @Enumerated(EnumType.STRING)
     @JdbcTypeCode(SqlTypes.NAMED_ENUM)
-    @Column(nullable = false, columnDefinition = "user_role")
+    @Column(columnDefinition = "user_role")
     private Role rol;
 
     @Column(name = "is_active")
@@ -44,6 +44,9 @@ public class Usuario implements UserDetails {
 
     @Column(name = "email_verificado")
     private boolean emailVerificado;
+
+    @Column(name = "auth0_sub", unique = true)
+    private String auth0Sub;
 
     @Column(name = "created_at")
     private LocalDateTime createdAt;
@@ -67,6 +70,9 @@ public class Usuario implements UserDetails {
 
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
+        if (rol == null) {
+            return List.of();
+        }
         return List.of(new SimpleGrantedAuthority("ROLE_" + rol.name()));
     }
 

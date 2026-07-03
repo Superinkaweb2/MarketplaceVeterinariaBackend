@@ -1,10 +1,8 @@
 package com.vet_saas;
 
 import org.junit.jupiter.api.Test;
-import org.springframework.boot.test.context.SpringBootTest;
 
-@SpringBootTest
-class VetSaasApplicationTests {
+class VetSaasApplicationTests extends AbstractIntegrationTest {
 
 	@Test
 	void contextLoads() {

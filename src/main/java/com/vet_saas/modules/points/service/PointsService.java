@@ -1,6 +1,7 @@
 package com.vet_saas.modules.points.service;
 
 import com.vet_saas.core.exceptions.types.BusinessException;
+import com.vet_saas.core.exceptions.types.ResourceNotFoundException;
 import com.vet_saas.modules.client.model.PerfilCliente;
 import com.vet_saas.modules.client.repository.ClienteRepository;
 import com.vet_saas.modules.points.dto.ClientPointsDashboardDto;
@@ -119,7 +120,7 @@ public class PointsService {
         return puntosClienteRepository.findById(idPerfil)
                 .orElseGet(() -> {
                     PerfilCliente perfil = clienteRepository.findById(idPerfil)
-                            .orElseThrow(() -> new RuntimeException("Perfil de cliente no encontrado"));
+                            .orElseThrow(() -> new ResourceNotFoundException("PerfilCliente", "id", idPerfil));
                     return PuntosCliente.builder()
                             .id(idPerfil)
                             .perfilCliente(perfil)

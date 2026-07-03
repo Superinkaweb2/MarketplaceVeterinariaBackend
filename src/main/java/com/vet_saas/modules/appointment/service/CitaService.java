@@ -1,5 +1,6 @@
 package com.vet_saas.modules.appointment.service;
 
+import com.vet_saas.core.exceptions.types.ForbiddenException;
 import com.vet_saas.core.exceptions.types.ResourceNotFoundException;
 import com.vet_saas.modules.appointment.dto.CitaRequest;
 import com.vet_saas.modules.appointment.dto.CitaResponse;
@@ -12,6 +13,7 @@ import com.vet_saas.modules.pet.model.Mascota;
 import com.vet_saas.modules.pet.repository.MascotaRepository;
 import com.vet_saas.modules.catalog.model.Servicio;
 import com.vet_saas.modules.catalog.repository.ServicioRepository;
+import com.vet_saas.modules.user.model.Role;
 import com.vet_saas.modules.user.model.Usuario;
 import com.vet_saas.modules.veterinarian.model.Veterinario;
 import com.vet_saas.modules.veterinarian.repository.VeterinarioRepository;
@@ -104,5 +106,25 @@ public class CitaService {
         }
 
         return CitaResponse.fromEntity(citaRepository.save(cita));
+    }
+
+    @Transactional(readOnly = true)
+    public void verifyOwnership(Long citaId, Usuario usuario) {
+        Cita cita = citaRepository.findById(citaId)
+                .orElseThrow(() -> new ResourceNotFoundException("Cita no encontrada"));
+
+        if (usuario.getRol() == Role.EMPRESA) {
+            Empresa empresa = empresaRepository.findByUsuarioPropietarioId(usuario.getId())
+                    .orElseThrow(() -> new ForbiddenException("Empresa no encontrada"));
+            if (cita.getEmpresa() == null || !cita.getEmpresa().getId().equals(empresa.getId())) {
+                throw new ForbiddenException("No tienes acceso a esta cita");
+            }
+        } else if (usuario.getRol() == Role.VETERINARIO) {
+            Veterinario vet = veterinarioRepository.findByUsuarioId(usuario.getId())
+                    .orElseThrow(() -> new ForbiddenException("Perfil de veterinario no encontrado"));
+            if (cita.getVeterinario() == null || !cita.getVeterinario().getId().equals(vet.getId())) {
+                throw new ForbiddenException("No tienes acceso a esta cita");
+            }
+        }
     }
 }

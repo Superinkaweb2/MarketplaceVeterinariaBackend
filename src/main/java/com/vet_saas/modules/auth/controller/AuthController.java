@@ -8,6 +8,7 @@ import com.vet_saas.modules.user.model.Usuario;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -84,5 +85,18 @@ public class AuthController {
         authService.resetPassword(request.token(), request.newPassword());
         return ResponseEntity.ok(
                 ApiResponse.success("Tu contraseña ha sido restablecida exitosamente"));
+    }
+
+    @PostMapping("/sync")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ApiResponse<SyncAuth0Response>> syncAuth0User(@RequestBody @Valid SyncAuth0Request request) {
+        var usuario = authService.syncAuth0User(request);
+        SyncAuth0Response response = new SyncAuth0Response(
+                usuario.getId(),
+                usuario.getCorreo(),
+                usuario.getRol()
+        );
+        return ResponseEntity.ok(
+                ApiResponse.success(response, "Usuario sincronizado exitosamente"));
     }
 }

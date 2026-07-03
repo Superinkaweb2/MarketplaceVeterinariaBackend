@@ -15,36 +15,47 @@ import org.springframework.http.HttpStatus;
 import java.security.Principal;
 import java.util.Map;
 
-@RestController
-@RequestMapping("/api/v1/users")
-@RequiredArgsConstructor
-public class UserController {
+    @RestController
+    @RequestMapping("/api/v1/users")
+    @RequiredArgsConstructor
+    public class UserController {
 
-    private final UsuarioService usuarioService;
-    private final UsuarioRepository usuarioRepository;
+        private final UsuarioService usuarioService;
+        private final UsuarioRepository usuarioRepository;
 
-    /**
-     * GET /api/v1/users/me
-     * Retorna la información básica del usuario autenticado, incluyendo su rol real.
-     */
-    @GetMapping("/me")
-    @PreAuthorize("isAuthenticated()")
-    public ResponseEntity<ApiResponse<Map<String, Object>>> getMe(Principal principal) {
-        Usuario usuario = usuarioService.findByCorreo(principal.getName());
-        return ResponseEntity.ok(ApiResponse.success(
-                Map.of(
-                        "id", usuario.getId(),
-                        "correo", usuario.getCorreo(),
-                        "rol", usuario.getRol().name()
-                ),
-                "Información del usuario"
-        ));
-    }
+        /**
+         * GET /api/v1/users/me
+         * Retorna la información básica del usuario autenticado, incluyendo su rol real.
+         */
+        @GetMapping("/me")
+        @PreAuthorize("isAuthenticated()")
+        public ResponseEntity<ApiResponse<Map<String, Object>>> getMe(Principal principal) {
+            Usuario usuario = usuarioService.findByCorreo(principal.getName());
+            return ResponseEntity.ok(ApiResponse.success(
+                    Map.of(
+                            "id", usuario.getId(),
+                            "correo", usuario.getCorreo(),
+                            "rol", usuario.getRol() != null ? usuario.getRol().name() : null
+                    ),
+                    "Información del usuario"
+            ));
+        }
+
+        /**
+         * GET /api/v1/users/exists/{correo}
+         * Verifica si un usuario con el correo electrónico especificado existe.
+         * Usado por el flujo de registro de Auth0 para determinar si un rol de Auth0 debe ser usado o si se debe forzar el role.
+         */
+        @GetMapping("/exists/{correo}")
+        public ResponseEntity<ApiResponse<Boolean>> existsByCorreo(@PathVariable("correo") String correo) {
+            boolean exists = usuarioRepository.findByCorreo(correo).isPresent();
+            return ResponseEntity.ok(ApiResponse.success(exists, "Verificación completada"));
+        }
 
     /**
      * PATCH /api/v1/users/me/role
-     * Permite a un usuario autenticado cambiar su rol UNA SOLA VEZ,
-     * siempre y cuando su rol actual sea CLIENTE (valor por defecto al registrarse).
+     * Permite a un usuario autenticado escoger su rol UNA SOLA VEZ.
+     * Solo funciona si el usuario aún no tiene rol definido (null) o tiene el rol por defecto (CLIENTE).
      *
      * Body: { "rol": "VETERINARIO" | "EMPRESA" | "REPARTIDOR" | "CLIENTE" }
      */
@@ -73,9 +84,9 @@ public class UserController {
 
         Usuario usuario = usuarioService.findByCorreo(principal.getName());
 
-        // Solo permitir el cambio si el usuario aún tiene el rol por defecto (CLIENTE)
-        // y no ha creado un perfil todavía
-        if (usuario.getRol() != Role.CLIENTE) {
+        // Solo permitir el cambio si el usuario aún no tiene rol definido (null)
+        // o si su rol actual es CLIENTE (valor por defecto)
+        if (usuario.getRol() != null && usuario.getRol() != Role.CLIENTE) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     "Tu rol ya está definido como " + usuario.getRol().name() + " y no puede ser cambiado desde aquí");
         }

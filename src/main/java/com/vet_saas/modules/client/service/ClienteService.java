@@ -18,7 +18,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.vet_saas.modules.points.service.PointsService;
+import lombok.extern.slf4j.Slf4j;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class ClienteService {
@@ -53,8 +55,7 @@ public class ClienteService {
         try {
             pointsService.addPoints(perfil.getId(), "REGISTRO", null, "Bono de bienvenida por registro");
         } catch (Exception e) {
-            // Log error but don't fail profile creation
-            System.err.println("Error granting registration points: " + e.getMessage());
+            log.error("Error granting registration points: {}", e.getMessage());
         }
 
         return mapToResponse(perfil);

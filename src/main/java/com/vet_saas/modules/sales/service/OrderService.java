@@ -37,7 +37,9 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import lombok.extern.slf4j.Slf4j;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class OrderService {
@@ -73,7 +75,11 @@ public class OrderService {
 
             // Filtro por código de orden
             if (codigoOrden != null && !codigoOrden.isBlank()) {
-                predicates.add(cb.like(cb.lower(root.get("codigoOrden")), "%" + codigoOrden.toLowerCase() + "%"));
+                String escapedCodigo = codigoOrden.toLowerCase()
+                        .replace("\\", "\\\\")
+                        .replace("%", "\\%")
+                        .replace("_", "\\_");
+                predicates.add(cb.like(cb.lower(root.get("codigoOrden")), "%" + escapedCodigo + "%", '\\'));
             }
 
             // Filtro por rango de fechas
@@ -103,7 +109,8 @@ public class OrderService {
     @Transactional
     public Long createOrder(CreateOrderDto dto) {
         String email = SecurityContextHolder.getContext().getAuthentication().getName();
-        Usuario usuario = usuarioRepository.findByCorreo(email).orElseThrow();
+        Usuario usuario = usuarioRepository.findByCorreo(email)
+                .orElseThrow(() -> new ResourceNotFoundException("Usuario", "email", email));
 
         Empresa empresa = null;
         Veterinario veterinario = null;
@@ -150,7 +157,7 @@ public class OrderService {
             Servicio servicio = null;
 
             if (itemDto.productoId() != null) {
-                producto = productoRepository.findById(itemDto.productoId())
+                producto = productoRepository.findByIdForUpdate(itemDto.productoId())
                         .orElseThrow(() -> new ResourceNotFoundException("Producto", "id", itemDto.productoId()));
 
                 if (empresa != null
@@ -251,21 +258,26 @@ public class OrderService {
             } catch (BusinessException e) {
                 throw e;
             } catch (Exception e) {
-                System.err.println("Error applying reward discount: " + e.getMessage());
+                log.error("Error applying reward discount: {}", e.getMessage());
             }
         }
         
         orden.setDescuento(descuentoTotal);
         orden.setTotal(subtotalGeneral.add(costoEnvio).subtract(descuentoTotal));
 
+        // Mark reward as used BEFORE saving order (same transaction = atomic)
+        if (dto.canjeRecompensaId() != null && descuentoTotal.compareTo(BigDecimal.ZERO) > 0) {
+            rewardService.markRewardAsUsed(dto.canjeRecompensaId(), null);
+        }
+
         ordenRepository.save(orden);
         
-        // Mark reward as used after saving order
+        // Associate canje with order AFTER save (separate concern, non-critical)
         if (dto.canjeRecompensaId() != null && descuentoTotal.compareTo(BigDecimal.ZERO) > 0) {
             try {
-                rewardService.markRewardAsUsed(dto.canjeRecompensaId(), orden.getId());
+                rewardService.linkCanjeToOrder(dto.canjeRecompensaId(), orden.getId());
             } catch (Exception e) {
-                System.err.println("Error marking reward as used: " + e.getMessage());
+                log.error("Error linking reward to order: {}", e.getMessage());
             }
         }
         
@@ -282,7 +294,7 @@ public class OrderService {
                       }
                  });
              } catch (Exception e) {
-                 System.err.println("Error adding points for purchase: " + e.getMessage());
+                 log.error("Error adding points for purchase: {}", e.getMessage());
              }
         }
 

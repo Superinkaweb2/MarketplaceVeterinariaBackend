@@ -24,4 +24,6 @@ public interface CitaRepository extends JpaRepository<Cita, Long> {
 
     @Query("SELECT DISTINCT c.mascota FROM Cita c WHERE c.veterinario.id = :veterinarioId AND c.mascota IS NOT NULL")
     List<Mascota> findUniquePatientsByVeterinarioId(@Param("veterinarioId") Long veterinarioId);
+
+    boolean existsByVeterinarioIdAndMascotaId(Long veterinarioId, Long mascotaId);
 }
