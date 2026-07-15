@@ -124,7 +124,7 @@ public class ClienteController {
             @RequestParam(defaultValue = "desc") String sort) {
 
         Sort.Direction direction = sort.equalsIgnoreCase("asc") ? Sort.Direction.ASC : Sort.Direction.DESC;
-        Pageable pageable = PageRequest.of(page, size, Sort.by(direction, "updatedAt"));
+        Pageable pageable = PageRequest.of(page, Math.min(size, 100), Sort.by(direction, "updatedAt"));
 
         Page<ClienteResponse> result = clienteService.getClientesByEmpresa(usuario, q, pageable);
         return ResponseEntity.ok(ApiResponse.success(result, "Clientes de la empresa"));

@@ -1,5 +1,6 @@
 package com.vet_saas.modules.sales.service;
 
+import com.vet_saas.config.AppProperties;
 import com.vet_saas.core.exceptions.types.BusinessException;
 import com.vet_saas.core.exceptions.types.ResourceNotFoundException;
 import com.vet_saas.modules.catalog.model.Producto;
@@ -51,15 +52,19 @@ class OrderServiceTest {
     @Mock private PointsService pointsService;
     @Mock private ClienteRepository clienteRepository;
     @Mock private RewardService rewardService;
+    @Mock private AppProperties appProperties;
 
     private OrderService orderService;
 
     @BeforeEach
     void setUp() {
+        AppProperties.Business businessProps = new AppProperties.Business();
+        lenient().when(appProperties.getBusiness()).thenReturn(businessProps);
+
         orderService = new OrderService(
                 ordenRepository, productoRepository, servicioRepository,
                 empresaRepository, veterinarioRepository, usuarioRepository,
-                pointsService, clienteRepository, rewardService);
+                pointsService, clienteRepository, rewardService, appProperties);
         SecurityContextHolder.clearContext();
     }
 
@@ -89,7 +94,7 @@ class OrderServiceTest {
         SecurityContextHolder.getContext().setAuthentication(auth);
         when(usuarioRepository.findByCorreo("test@test.com")).thenReturn(Optional.of(user));
 
-        CreateOrderDto dto = new CreateOrderDto(null, null, null, null, null, null, null, null,
+        CreateOrderDto dto = new CreateOrderDto(null, null, null, null, null, null, null, null, null, null,
                 List.of(new OrderItemDto(1L, null, 2)));
 
         assertThrows(BusinessException.class, () -> orderService.createOrder(dto));
@@ -121,7 +126,7 @@ class OrderServiceTest {
         lenient().when(ordenRepository.findByUsuarioClienteId(eq(1L), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of()));
 
-        CreateOrderDto dto = new CreateOrderDto(10L, null, null, null, null, null, null, null,
+        CreateOrderDto dto = new CreateOrderDto(10L, null, null, null, null, null, null, null, null, null,
                 List.of(new OrderItemDto(100L, null, 2)));
 
         Long orderId = orderService.createOrder(dto);
@@ -153,7 +158,7 @@ class OrderServiceTest {
                 .build();
         when(productoRepository.findByIdForUpdate(100L)).thenReturn(Optional.of(producto));
 
-        CreateOrderDto dto = new CreateOrderDto(10L, null, null, null, null, null, null, null,
+        CreateOrderDto dto = new CreateOrderDto(10L, null, null, null, null, null, null, null, null, null,
                 List.of(new OrderItemDto(100L, null, 5)));
 
         assertThrows(BusinessException.class, () -> orderService.createOrder(dto));
@@ -174,7 +179,7 @@ class OrderServiceTest {
             return o;
         });
 
-        CreateOrderDto dto = new CreateOrderDto(10L, null, null, null, null, null, null, null,
+        CreateOrderDto dto = new CreateOrderDto(10L, null, null, null, null, null, null, null, null, null,
                 List.of());
 
         Long orderId = orderService.createOrder(dto);
@@ -213,7 +218,7 @@ class OrderServiceTest {
         lenient().when(ordenRepository.findByUsuarioClienteId(eq(1L), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of()));
 
-        CreateOrderDto dto = new CreateOrderDto(10L, null,
+        CreateOrderDto dto = new CreateOrderDto(10L, null, null, null,
                 new BigDecimal("15.00"), null, null, null, null, null,
                 List.of(new OrderItemDto(100L, null, 1)));
 

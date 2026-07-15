@@ -56,13 +56,33 @@ public class PaymentService {
         Orden orden = ordenRepository.findByIdWithDetails(ordenId)
                 .orElseThrow(() -> new BusinessException("Orden no encontrada"));
 
-        if (!orden.getUsuarioCliente().getId().equals(usuarioActual.getId())) {
+        if (orden.getUsuarioCliente() == null || !orden.getUsuarioCliente().getId().equals(usuarioActual.getId())) {
             LOGGER.warn("Usuario {} intentó pagar la orden {} que no le pertenece", usuarioActual.getId(), ordenId);
             throw new ForbiddenException("No tienes permiso para procesar esta orden.");
         }
 
+        return buildCheckout(orden);
+    }
+
+    @Transactional
+    public PaymentPreferenceResponse createGuestCheckoutUrl(Long ordenId) {
+        LOGGER.info("Iniciando generación de checkout guest para ordenId: {}", ordenId);
+
+        Orden orden = ordenRepository.findByIdWithDetails(ordenId)
+                .orElseThrow(() -> new BusinessException("Orden no encontrada"));
+
+        if (orden.getUsuarioCliente() != null) {
+            throw new BusinessException("Esta orden pertenece a un usuario registrado. Usa el checkout normal.");
+        }
+
+        return buildCheckout(orden);
+    }
+
+    private PaymentPreferenceResponse buildCheckout(Orden orden) {
+        LOGGER.info("Building checkout para ordenId: {}", orden.getId());
+
         if (orden.getEstado() != EstadoOrden.PENDIENTE) {
-            LOGGER.warn("Abortando checkout: La orden {} ya está en estado {}", ordenId, orden.getEstado());
+            LOGGER.warn("Abortando checkout: La orden {} ya está en estado {}", orden.getId(), orden.getEstado());
             throw new BusinessException("La orden ya fue procesada o no está disponible para pago");
         }
 
@@ -92,10 +112,20 @@ public class PaymentService {
             throw new BusinessException("La orden no tiene un vendedor (Empresa/Veterinario) asociado.");
         }
 
-        // Fetch profile to get real names
-        com.vet_saas.modules.client.model.PerfilCliente perfil = clienteRepository
-                .findByUsuarioId(orden.getUsuarioCliente().getId())
-                .orElse(null);
+        // Resolve payer info: guest vs authenticated
+        String payerName;
+        String payerEmail;
+
+        if (orden.getUsuarioCliente() != null) {
+            com.vet_saas.modules.client.model.PerfilCliente perfil = clienteRepository
+                    .findByUsuarioId(orden.getUsuarioCliente().getId())
+                    .orElse(null);
+            payerName = perfil != null ? perfil.getNombres() + " " + perfil.getApellidos() : "Cliente Huella360";
+            payerEmail =orden.getUsuarioCliente().getCorreo();
+        } else {
+            payerName = orden.getGuestNombre() != null ? orden.getGuestNombre() : "Cliente Huella360";
+            payerEmail = orden.getGuestEmail();
+        }
 
         try {
             List<PreferenceItemRequest> items = new ArrayList<>(orden.getDetalles().stream()
@@ -129,30 +159,26 @@ public class PaymentService {
             }
 
             boolean isSandbox = appProperties.getExternal().getMercadoPago().isSandbox();
-            String payerEmail = null;
+            String effectivePayerEmail = null;
 
             if (isSandbox) {
                 String configuredEmail = appProperties.getExternal().getMercadoPago().getSandboxBuyerEmail();
                 if (configuredEmail != null && !configuredEmail.isBlank()) {
-                    payerEmail = configuredEmail;
-                    LOGGER.info("Sandbox detectado: usando email de prueba '{}' como payer", payerEmail);
+                    effectivePayerEmail = configuredEmail;
+                    LOGGER.info("Sandbox detectado: usando email de prueba '{}' como payer", effectivePayerEmail);
                 } else {
                     LOGGER.info("Sandbox detectado: dejando email en blanco para ingreso manual en el checkout");
                 }
             } else {
-                payerEmail = orden.getUsuarioCliente().getCorreo();
+                effectivePayerEmail = payerEmail;
             }
 
             PreferencePayerRequest.PreferencePayerRequestBuilder payerBuilder = PreferencePayerRequest.builder();
-            if (payerEmail != null) {
-                payerBuilder.email(payerEmail);
+            if (effectivePayerEmail != null) {
+                payerBuilder.email(effectivePayerEmail);
             }
 
-            if (perfil != null) {
-                payerBuilder.name(perfil.getNombres() + " " + perfil.getApellidos());
-            } else {
-                payerBuilder.name("Cliente Huella360");
-            }
+            payerBuilder.name(payerName);
 
             PreferencePayerRequest payer = payerBuilder.build();
 
@@ -182,7 +208,7 @@ public class PaymentService {
             return response;
 
         } catch (Exception ex) {
-            LOGGER.error("Error creando preferencia para orden {}", ordenId, ex);
+            LOGGER.error("Error creando preferencia para orden {}", orden.getId(), ex);
             throw new BusinessException("Error interno al procesar el pago");
         }
     }

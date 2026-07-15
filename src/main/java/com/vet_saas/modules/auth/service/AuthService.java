@@ -8,6 +8,7 @@ import com.vet_saas.modules.auth.dto.LoginRequest;
 import com.vet_saas.modules.auth.dto.RegisterRequest;
 import com.vet_saas.modules.auth.dto.SyncAuth0Request;
 import com.vet_saas.modules.notification.service.EmailService;
+import com.vet_saas.modules.subscription.service.SubscriptionService;
 import com.vet_saas.modules.user.model.Role;
 import com.vet_saas.modules.user.model.Usuario;
 import com.vet_saas.modules.user.repository.UsuarioRepository;
@@ -30,6 +31,7 @@ public class AuthService {
     private final RefreshTokenService refreshTokenService;
     private final EmailService emailService;
     private final AuthTokenService authTokenService;
+    private final SubscriptionService subscriptionService;
 
     @Transactional
     public AuthResponse register(RegisterRequest request) {
@@ -46,6 +48,11 @@ public class AuthService {
                 .build();
 
         usuarioRepository.save(user);
+
+        // Asignar plan gratis por defecto para clientes B2C
+        if (request.rol() == Role.CLIENTE) {
+            subscriptionService.assignDefaultPlanForClient(user);
+        }
 
         // Generar token de verificación
         String token = authTokenService.createToken(user, com.vet_saas.modules.auth.model.TokenType.EMAIL_VERIFICATION,
@@ -177,6 +184,13 @@ public class AuthService {
                 .auth0Sub(request.auth0Sub())
                 .build();
 
-        return usuarioRepository.save(newUser);
+        usuarioRepository.save(newUser);
+
+        // Asignar plan gratis por defecto para clientes B2C
+        if (request.rol() == Role.CLIENTE) {
+            subscriptionService.assignDefaultPlanForClient(newUser);
+        }
+
+        return newUser;
     }
 }

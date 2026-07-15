@@ -1,5 +1,6 @@
 package com.vet_saas.modules.client.service;
 
+import com.vet_saas.config.AppProperties;
 import com.vet_saas.core.exceptions.types.BusinessException;
 import com.vet_saas.core.exceptions.types.ResourceNotFoundException;
 import com.vet_saas.modules.client.dto.ClienteResponse;
@@ -7,7 +8,7 @@ import com.vet_saas.modules.client.dto.CreateClienteDto;
 import com.vet_saas.modules.client.model.PerfilCliente;
 import com.vet_saas.modules.client.repository.ClienteRepository;
 import com.vet_saas.modules.company.model.Empresa;
-import com.vet_saas.modules.company.repository.EmpresaRepository;
+import com.vet_saas.modules.company.service.EmpresaLookupService;
 import com.vet_saas.modules.points.service.PointsService;
 import com.vet_saas.modules.user.model.Role;
 import com.vet_saas.modules.user.model.Usuario;
@@ -30,14 +31,16 @@ import static org.mockito.Mockito.*;
 class ClienteServiceTest {
 
     @Mock private ClienteRepository clienteRepository;
-    @Mock private EmpresaRepository empresaRepository;
+    @Mock private EmpresaLookupService empresaLookupService;
     @Mock private PointsService pointsService;
+    @Mock private AppProperties appProperties;
 
     private ClienteService clienteService;
 
     @BeforeEach
     void setUp() {
-        clienteService = new ClienteService(clienteRepository, empresaRepository, pointsService);
+        lenient().when(appProperties.getBusiness()).thenReturn(new AppProperties.Business());
+        clienteService = new ClienteService(clienteRepository, empresaLookupService, pointsService, appProperties);
     }
 
     private Usuario buildUser(Long id) {
@@ -58,6 +61,7 @@ class ClienteServiceTest {
                 .apellidos("Perez")
                 .telefono("999999999")
                 .pais("Perú")
+                .activo(true)
                 .build();
     }
 
@@ -66,7 +70,7 @@ class ClienteServiceTest {
         Usuario user = buildUser(1L);
         CreateClienteDto dto = new CreateClienteDto("Juan", "Perez", "999999999", "Av. Lima 123", "Lima", "Perú");
 
-        when(clienteRepository.existsByUsuarioId(1L)).thenReturn(false);
+        when(clienteRepository.existsByUsuarioIdAndActivoTrue(1L)).thenReturn(false);
         when(clienteRepository.save(any(PerfilCliente.class))).thenAnswer(inv -> {
             PerfilCliente p = inv.getArgument(0);
             p.setId(1L);
@@ -83,7 +87,7 @@ class ClienteServiceTest {
     @Test
     void createPerfil_alreadyExists_throwsBusinessException() {
         Usuario user = buildUser(1L);
-        when(clienteRepository.existsByUsuarioId(1L)).thenReturn(true);
+        when(clienteRepository.existsByUsuarioIdAndActivoTrue(1L)).thenReturn(true);
 
         CreateClienteDto dto = new CreateClienteDto("Juan", "Perez", "999999999", null, null, null);
         assertThrows(BusinessException.class, () -> clienteService.createPerfil(user, dto));
@@ -93,7 +97,7 @@ class ClienteServiceTest {
     void getMyPerfil_success() {
         Usuario user = buildUser(1L);
         PerfilCliente perfil = buildPerfil(user);
-        when(clienteRepository.findByUsuarioId(1L)).thenReturn(Optional.of(perfil));
+        when(clienteRepository.findByUsuarioIdAndActivoTrue(1L)).thenReturn(Optional.of(perfil));
 
         ClienteResponse response = clienteService.getMyPerfil(user);
         assertEquals("Juan", response.nombres());
@@ -102,7 +106,7 @@ class ClienteServiceTest {
     @Test
     void getMyPerfil_notFound_throws() {
         Usuario user = buildUser(1L);
-        when(clienteRepository.findByUsuarioId(1L)).thenReturn(Optional.empty());
+        when(clienteRepository.findByUsuarioIdAndActivoTrue(1L)).thenReturn(Optional.empty());
 
         assertThrows(ResourceNotFoundException.class, () -> clienteService.getMyPerfil(user));
     }
@@ -111,7 +115,7 @@ class ClienteServiceTest {
     void updateMyPerfil_updatesFields() {
         Usuario user = buildUser(1L);
         PerfilCliente perfil = buildPerfil(user);
-        when(clienteRepository.findByUsuarioId(1L)).thenReturn(Optional.of(perfil));
+        when(clienteRepository.findByUsuarioIdAndActivoTrue(1L)).thenReturn(Optional.of(perfil));
         when(clienteRepository.save(any(PerfilCliente.class))).thenAnswer(inv -> inv.getArgument(0));
 
         var dto = new com.vet_saas.modules.client.dto.UpdateClienteDto(
@@ -125,10 +129,12 @@ class ClienteServiceTest {
     void deleteMiPerfil_success() {
         Usuario user = buildUser(1L);
         PerfilCliente perfil = buildPerfil(user);
-        when(clienteRepository.findByUsuarioId(1L)).thenReturn(Optional.of(perfil));
+        when(clienteRepository.findByUsuarioIdAndActivoTrue(1L)).thenReturn(Optional.of(perfil));
+        when(clienteRepository.save(any(PerfilCliente.class))).thenAnswer(inv -> inv.getArgument(0));
 
         assertDoesNotThrow(() -> clienteService.deleteMiPerfil(user));
-        verify(clienteRepository).delete(perfil);
+        verify(clienteRepository).save(perfil);
+        assertFalse(perfil.getActivo());
     }
 
     @Test

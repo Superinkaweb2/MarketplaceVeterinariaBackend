@@ -6,62 +6,100 @@ import com.vet_saas.modules.delivery.dto.response.DeliveryResponseDTO;
 import com.vet_saas.modules.delivery.dto.response.RepartidorResponseDTO;
 import com.vet_saas.modules.delivery.model.Delivery;
 import com.vet_saas.modules.delivery.model.Repartidor;
-import org.mapstruct.*;
-import org.springframework.beans.factory.annotation.Autowired;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Component;
 
-@Mapper(componentModel = "spring", nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)
-public abstract class DeliveryMapper {
+@Component
+@RequiredArgsConstructor
+public class DeliveryMapper {
 
-    @Autowired
-    protected ClienteRepository clienteRepository;
+    private final ClienteRepository clienteRepository;
 
-    @Mapping(target = "idDelivery",       source = "id")
-    @Mapping(target = "ordenId",            source = "orden.id")
-    @Mapping(target = "repartidorId",       source = "repartidor.idRepartidor")
-    @Mapping(target = "repartidorNombre",   expression = "java(getRepartidorNombre(delivery))")
-    @Mapping(target = "repartidorFoto",     source = "repartidor.fotoPerfil")
-    @Mapping(target = "repartidorTelefono", source = "repartidor.telefono")
-    @Mapping(target = "repartidorVehiculo", expression = "java(delivery.getRepartidor() != null ? delivery.getRepartidor().getTipoVehiculo().name() : null)")
-    @Mapping(target = "repartidorLat",      source = "repartidor.ubicacionLat")
-    @Mapping(target = "repartidorLng",      source = "repartidor.ubicacionLng")
-    @Mapping(target = "repartidorCalificacionPromedio", source = "repartidor.calificacionPromedio")
-    @Mapping(target = "clienteNombre",      expression = "java(getClienteNombre(delivery))")
-    @Mapping(target = "clienteTelefono",    expression = "java(getClienteTelefono(delivery))")
-    @Mapping(target = "otpCliente",         ignore = true)
-    public abstract DeliveryResponseDTO toResponseDTO(Delivery delivery);
+    public DeliveryResponseDTO toResponseDTO(Delivery delivery) {
+        if (delivery == null) return null;
 
-    /** Copia de toResponseDTO pero con OTP incluido (solo al crear) */
-    @Mapping(target = "idDelivery",       source = "delivery.id")
-    @Mapping(target = "ordenId",            source = "delivery.orden.id")
-    @Mapping(target = "repartidorId",       source = "delivery.repartidor.idRepartidor")
-    @Mapping(target = "repartidorNombre",   expression = "java(getRepartidorNombre(delivery))")
-    @Mapping(target = "repartidorFoto",     source = "delivery.repartidor.fotoPerfil")
-    @Mapping(target = "repartidorTelefono", source = "delivery.repartidor.telefono")
-    @Mapping(target = "repartidorLat",      source = "delivery.repartidor.ubicacionLat")
-    @Mapping(target = "repartidorLng",      source = "delivery.repartidor.ubicacionLng")
-    @Mapping(target = "repartidorCalificacionPromedio", source = "delivery.repartidor.calificacionPromedio")
-    @Mapping(target = "repartidorVehiculo", ignore = true)
-    @Mapping(target = "clienteNombre",      expression = "java(getClienteNombre(delivery))")
-    @Mapping(target = "clienteTelefono",    expression = "java(getClienteTelefono(delivery))")
-    @Mapping(target = "otpCliente",         source = "otp")
-    public abstract DeliveryResponseDTO toResponseDTOConOTP(Delivery delivery, String otp);
+        return DeliveryResponseDTO.builder()
+                .idDelivery(delivery.getId())
+                .ordenId(delivery.getOrden() != null ? delivery.getOrden().getId() : null)
+                .estado(delivery.getEstado())
+                .clienteNombre(getClienteNombre(delivery))
+                .clienteTelefono(getClienteTelefono(delivery))
+                .repartidorId(delivery.getRepartidor() != null ? delivery.getRepartidor().getIdRepartidor() : null)
+                .repartidorNombre(getRepartidorNombre(delivery))
+                .repartidorFoto(delivery.getRepartidor() != null ? delivery.getRepartidor().getFotoPerfil() : null)
+                .repartidorTelefono(delivery.getRepartidor() != null ? delivery.getRepartidor().getTelefono() : null)
+                .repartidorVehiculo(delivery.getRepartidor() != null && delivery.getRepartidor().getTipoVehiculo() != null
+                        ? delivery.getRepartidor().getTipoVehiculo().name() : null)
+                .repartidorLat(delivery.getRepartidor() != null ? delivery.getRepartidor().getUbicacionLat() : null)
+                .repartidorLng(delivery.getRepartidor() != null ? delivery.getRepartidor().getUbicacionLng() : null)
+                .repartidorCalificacionPromedio(delivery.getRepartidor() != null ? delivery.getRepartidor().getCalificacionPromedio() : null)
+                .destinoLat(delivery.getDestinoLat())
+                .destinoLng(delivery.getDestinoLng())
+                .destinoDireccion(delivery.getDestinoDireccion())
+                .destinoReferencia(delivery.getDestinoReferencia())
+                .origenLat(delivery.getOrigenLat())
+                .origenLng(delivery.getOrigenLng())
+                .origenDireccion(delivery.getOrigenDireccion())
+                .tiempoEstimadoMin(delivery.getTiempoEstimadoMin())
+                .distanciaKm(delivery.getDistanciaKm())
+                .costoDelivery(delivery.getCostoDelivery())
+                .otpCliente(null)
+                .calificacionRepartidor(delivery.getCalificacionRepartidor())
+                .comentarioRepartidor(null)
+                .calificacionProducto(delivery.getCalificacionProducto())
+                .comentarioProducto(delivery.getComentarioProducto())
+                .fotoEntregaUrl(delivery.getFotoEntregaUrl())
+                .asignadoAt(delivery.getAsignadoAt())
+                .recogidoAt(delivery.getRecogidoAt())
+                .entregadoAt(delivery.getEntregadoAt())
+                .createdAt(delivery.getCreatedAt())
+                .build();
+    }
 
-    @Mapping(target = "fotoPerfil", source = "fotoPerfil")
-    public abstract RepartidorResponseDTO toRepartidorDTO(Repartidor repartidor);
+    public DeliveryResponseDTO toResponseDTOConOTP(Delivery delivery, String otp) {
+        DeliveryResponseDTO dto = toResponseDTO(delivery);
+        if (dto != null) {
+            dto.setOtpCliente(otp);
+            dto.setRepartidorVehiculo(null);
+        }
+        return dto;
+    }
 
-    protected String getRepartidorNombre(Delivery delivery) {
+    public RepartidorResponseDTO toRepartidorDTO(Repartidor repartidor) {
+        if (repartidor == null) return null;
+
+        return RepartidorResponseDTO.builder()
+                .idRepartidor(repartidor.getIdRepartidor())
+                .nombres(repartidor.getNombres())
+                .apellidos(repartidor.getApellidos())
+                .telefono(repartidor.getTelefono())
+                .fotoPerfil(repartidor.getFotoPerfil())
+                .tipoVehiculo(repartidor.getTipoVehiculo())
+                .placaVehiculo(repartidor.getPlacaVehiculo())
+                .estadoActual(repartidor.getEstadoActual())
+                .estadoValidacion(repartidor.getEstadoValidacion())
+                .calificacionPromedio(repartidor.getCalificacionPromedio())
+                .totalEntregas(repartidor.getTotalEntregas())
+                .ubicacionLat(repartidor.getUbicacionLat())
+                .ubicacionLng(repartidor.getUbicacionLng())
+                .ultimaUbicacionAt(repartidor.getUltimaUbicacionAt())
+                .activo(repartidor.getActivo())
+                .build();
+    }
+
+    private String getRepartidorNombre(Delivery delivery) {
         if (delivery.getRepartidor() == null) return null;
         return delivery.getRepartidor().getNombres() + " " + delivery.getRepartidor().getApellidos();
     }
 
-    protected String getClienteNombre(Delivery delivery) {
+    private String getClienteNombre(Delivery delivery) {
         if (delivery.getOrden() == null || delivery.getOrden().getUsuarioCliente() == null) return "Cliente";
         return clienteRepository.findByUsuarioId(delivery.getOrden().getUsuarioCliente().getId())
                 .map(p -> p.getNombres() + " " + p.getApellidos())
                 .orElse("Cliente");
     }
 
-    protected String getClienteTelefono(Delivery delivery) {
+    private String getClienteTelefono(Delivery delivery) {
         if (delivery.getOrden() == null || delivery.getOrden().getUsuarioCliente() == null) return null;
         return clienteRepository.findByUsuarioId(delivery.getOrden().getUsuarioCliente().getId())
                 .map(PerfilCliente::getTelefono)

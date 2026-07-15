@@ -67,4 +67,13 @@ public class SubscriptionController {
                                 "Preferencia de pago generada exitosamente"));
         }
 
+        @PatchMapping("/cancel")
+        @PreAuthorize("hasAnyRole('EMPRESA', 'VETERINARIO')")
+        public ResponseEntity<ApiResponse<SuscripcionResponseDto>> cancelSubscription(
+                        @AuthenticationPrincipal Usuario usuario) {
+                return ResponseEntity.ok(ApiResponse.success(
+                                subscriptionService.cancelSubscription(usuario),
+                                "Suscripción cancelada exitosamente"));
+        }
+
 }

@@ -27,7 +27,7 @@ public class PublicProductController {
             @RequestParam(defaultValue = "desc") String sort) {
 
         Sort.Direction direction = sort.equalsIgnoreCase("asc") ? Sort.Direction.ASC : Sort.Direction.DESC;
-        Pageable pageable = PageRequest.of(page, size, Sort.by(direction, "createdAt"));
+        Pageable pageable = PageRequest.of(page, Math.min(size, 100), Sort.by(direction, "createdAt"));
 
         Page<ProductResponse> result = productService.getPublicProducts(q, category, pageable);
         return ResponseEntity.ok(ApiResponse.success(result, "Resultados de la búsqueda"));
@@ -47,7 +47,7 @@ public class PublicProductController {
             @RequestParam(defaultValue = "desc") String sort) {
 
         Sort.Direction direction = sort.equalsIgnoreCase("asc") ? Sort.Direction.ASC : Sort.Direction.DESC;
-        Pageable pageable = PageRequest.of(page, size, Sort.by(direction, "createdAt"));
+        Pageable pageable = PageRequest.of(page, Math.min(size, 100), Sort.by(direction, "createdAt"));
 
         Page<ProductResponse> result = productService.getPublicProductsByCompany(companyId, pageable);
         return ResponseEntity.ok(ApiResponse.success(result, "Productos de la empresa recuperados"));

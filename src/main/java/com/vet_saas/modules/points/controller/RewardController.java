@@ -5,6 +5,7 @@ import com.vet_saas.modules.points.dto.CreateRewardDto;
 import com.vet_saas.modules.points.dto.RedeemedRewardDto;
 import com.vet_saas.modules.points.dto.RewardDto;
 import com.vet_saas.modules.points.service.RewardService;
+import com.vet_saas.core.exceptions.types.ResourceNotFoundException;
 import com.vet_saas.modules.user.model.Usuario;
 import com.vet_saas.modules.user.service.UsuarioService;
 import com.vet_saas.modules.company.repository.EmpresaRepository;
@@ -102,7 +103,7 @@ public class RewardController {
     private Long getEmpresaId(Principal principal) {
         Usuario usuario = usuarioService.findByCorreo(principal.getName());
         return empresaRepository.findByUsuarioPropietarioId(usuario.getId())
-                .orElseThrow(() -> new RuntimeException("Empresa no encontrada para este usuario"))
+                .orElseThrow(() -> new ResourceNotFoundException("Empresa", "usuarioId", usuario.getId()))
                 .getId();
     }
 }

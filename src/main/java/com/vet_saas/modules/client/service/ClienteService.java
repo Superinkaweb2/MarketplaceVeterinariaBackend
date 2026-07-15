@@ -1,5 +1,6 @@
 package com.vet_saas.modules.client.service;
 
+import com.vet_saas.config.AppProperties;
 import com.vet_saas.core.exceptions.types.BusinessException;
 import com.vet_saas.core.exceptions.types.ForbiddenException;
 import com.vet_saas.core.exceptions.types.ResourceNotFoundException;
@@ -9,7 +10,7 @@ import com.vet_saas.modules.client.dto.UpdateClienteDto;
 import com.vet_saas.modules.client.model.PerfilCliente;
 import com.vet_saas.modules.client.repository.ClienteRepository;
 import com.vet_saas.modules.company.model.Empresa;
-import com.vet_saas.modules.company.repository.EmpresaRepository;
+import com.vet_saas.modules.company.service.EmpresaLookupService;
 import com.vet_saas.modules.user.model.Usuario;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -26,16 +27,13 @@ import lombok.extern.slf4j.Slf4j;
 public class ClienteService {
 
     private final ClienteRepository clienteRepository;
-    private final EmpresaRepository empresaRepository;
+    private final EmpresaLookupService empresaLookupService;
     private final PointsService pointsService;
+    private final AppProperties appProperties;
 
-    /**
-     * Crear perfil de cliente para el usuario autenticado (rol CLIENTE).
-     * Solo se puede crear un perfil por usuario.
-     */
     @Transactional
     public ClienteResponse createPerfil(Usuario usuario, CreateClienteDto dto) {
-        if (clienteRepository.existsByUsuarioId(usuario.getId())) {
+        if (clienteRepository.existsByUsuarioIdAndActivoTrue(usuario.getId())) {
             throw new BusinessException("Ya tienes un perfil de cliente registrado.");
         }
 
@@ -46,12 +44,12 @@ public class ClienteService {
                 .telefono(dto.telefono())
                 .direccion(dto.direccion())
                 .ciudad(dto.ciudad())
-                .pais(dto.pais() != null ? dto.pais() : "Perú")
+                .pais(dto.pais() != null ? dto.pais() : appProperties.getBusiness().getDefaultCountry())
+                .activo(true)
                 .build();
 
         perfil = clienteRepository.save(perfil);
-        
-        // Grant Points on Registration
+
         try {
             pointsService.addPoints(perfil.getId(), "REGISTRO", null, "Bono de bienvenida por registro");
         } catch (Exception e) {
@@ -61,82 +59,51 @@ public class ClienteService {
         return mapToResponse(perfil);
     }
 
-    /**
-     * Obtener el perfil propio del usuario autenticado (rol CLIENTE).
-     */
     @Transactional(readOnly = true)
     public ClienteResponse getMyPerfil(Usuario usuario) {
-        PerfilCliente perfil = clienteRepository.findByUsuarioId(usuario.getId())
+        PerfilCliente perfil = clienteRepository.findByUsuarioIdAndActivoTrue(usuario.getId())
                 .orElseThrow(() -> new ResourceNotFoundException("PerfilCliente", "usuarioId", usuario.getId()));
         return mapToResponse(perfil);
     }
 
-    /**
-     * Actualizar perfil propio del usuario autenticado (rol CLIENTE).
-     */
     @Transactional
     public ClienteResponse updateMyPerfil(Usuario usuario, UpdateClienteDto dto, String fotoUrl) {
-        PerfilCliente perfil = clienteRepository.findByUsuarioId(usuario.getId())
+        PerfilCliente perfil = clienteRepository.findByUsuarioIdAndActivoTrue(usuario.getId())
                 .orElseThrow(() -> new ResourceNotFoundException("PerfilCliente", "usuarioId", usuario.getId()));
 
-        if (dto.nombres() != null)
-            perfil.setNombres(dto.nombres());
-        if (dto.apellidos() != null)
-            perfil.setApellidos(dto.apellidos());
-        if (dto.telefono() != null)
-            perfil.setTelefono(dto.telefono());
-        if (dto.direccion() != null)
-            perfil.setDireccion(dto.direccion());
-        if (dto.ciudad() != null)
-            perfil.setCiudad(dto.ciudad());
-        if (dto.pais() != null)
-            perfil.setPais(dto.pais());
-
-        if (fotoUrl != null) {
-            perfil.setFotoPerfilUrl(fotoUrl);
-        }
+        if (dto.nombres() != null) perfil.setNombres(dto.nombres());
+        if (dto.apellidos() != null) perfil.setApellidos(dto.apellidos());
+        if (dto.telefono() != null) perfil.setTelefono(dto.telefono());
+        if (dto.direccion() != null) perfil.setDireccion(dto.direccion());
+        if (dto.ciudad() != null) perfil.setCiudad(dto.ciudad());
+        if (dto.pais() != null) perfil.setPais(dto.pais());
+        if (fotoUrl != null) perfil.setFotoPerfilUrl(fotoUrl);
 
         return mapToResponse(clienteRepository.save(perfil));
     }
 
-    /**
-     * Eliminar perfil propio del usuario autenticado (hard delete).
-     */
     @Transactional
     public void deleteMiPerfil(Usuario usuario) {
-        PerfilCliente perfil = clienteRepository.findByUsuarioId(usuario.getId())
+        PerfilCliente perfil = clienteRepository.findByUsuarioIdAndActivoTrue(usuario.getId())
                 .orElseThrow(() -> new ResourceNotFoundException("PerfilCliente", "usuarioId", usuario.getId()));
-        clienteRepository.delete(perfil);
+        perfil.setActivo(false);
+        clienteRepository.save(perfil);
     }
 
-    // -------------------------------------------------------------------------
-    // ENDPOINTS PARA ROL EMPRESA (read-only: ver sus clientes)
-    // -------------------------------------------------------------------------
-
-    /**
-     * Listar los clientes que han realizado órdenes a la empresa autenticada.
-     * Requiere rol EMPRESA.
-     */
     @Transactional(readOnly = true)
     public Page<ClienteResponse> getClientesByEmpresa(Usuario usuario, String q, Pageable pageable) {
-        Empresa empresa = getEmpresaFromUsuario(usuario);
+        Empresa empresa = empresaLookupService.getEmpresaFromUsuario(usuario);
         return clienteRepository.findClientesByEmpresaId(empresa.getId(), q, pageable)
                 .map(this::mapToResponse);
     }
 
-    /**
-     * Ver el perfil de un cliente específico (solo si pertenece a la empresa).
-     * Requiere rol EMPRESA.
-     */
     @Transactional(readOnly = true)
     public ClienteResponse getClienteByIdForEmpresa(Usuario usuario, Long perfilId) {
-        Empresa empresa = getEmpresaFromUsuario(usuario);
+        Empresa empresa = empresaLookupService.getEmpresaFromUsuario(usuario);
 
-        // Verificar que el perfil existe
         PerfilCliente perfil = clienteRepository.findById(perfilId)
                 .orElseThrow(() -> new ResourceNotFoundException("Cliente", "id", perfilId));
 
-        // Verificar que ese cliente tiene órdenes con esta empresa
         boolean esClienteDeLaEmpresa = clienteRepository
                 .findClientesByEmpresaId(empresa.getId(), null, Pageable.unpaged())
                 .getContent()
@@ -150,13 +117,6 @@ public class ClienteService {
         return mapToResponse(perfil);
     }
 
-    // -------------------------------------------------------------------------
-    // ADMIN
-    // -------------------------------------------------------------------------
-
-    /**
-     * Buscar clientes por nombre o apellido (Admin).
-     */
     @Transactional(readOnly = true)
     public Page<ClienteResponse> searchClientes(String q, Pageable pageable) {
         if (q == null || q.isBlank()) {
@@ -165,23 +125,11 @@ public class ClienteService {
         return clienteRepository.searchByNombre(q, pageable).map(this::mapToResponse);
     }
 
-    /**
-     * Obtener perfil de cliente por id (Admin).
-     */
     @Transactional(readOnly = true)
     public ClienteResponse getClienteById(Long id) {
         return clienteRepository.findById(id)
                 .map(this::mapToResponse)
                 .orElseThrow(() -> new ResourceNotFoundException("Cliente", "id", id));
-    }
-
-    // -------------------------------------------------------------------------
-    // PRIVADOS
-    // -------------------------------------------------------------------------
-
-    private Empresa getEmpresaFromUsuario(Usuario usuario) {
-        return empresaRepository.findByUsuarioPropietarioId(usuario.getId())
-                .orElseThrow(() -> new BusinessException("Debes tener una empresa registrada para ver tus clientes."));
     }
 
     private ClienteResponse mapToResponse(PerfilCliente perfil) {

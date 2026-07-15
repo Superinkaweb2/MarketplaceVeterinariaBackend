@@ -5,6 +5,7 @@ import com.vet_saas.core.service.StorageService;
 import com.vet_saas.modules.pet.dto.CreatePetDto;
 import com.vet_saas.modules.pet.dto.PetResponse;
 import com.vet_saas.modules.pet.dto.UpdatePetDto;
+import com.vet_saas.modules.pet.service.HealthCardService;
 import com.vet_saas.modules.pet.service.PetService;
 import com.vet_saas.modules.user.model.Usuario;
 import jakarta.validation.Valid;
@@ -26,6 +27,7 @@ import java.util.List;
 public class PetController {
 
         private final PetService petService;
+        private final HealthCardService healthCardService;
         private final StorageService storageService;
 
         @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
@@ -90,5 +92,18 @@ public class PetController {
                 petService.deletePet(usuario, id);
                 return ResponseEntity.ok(
                                 ApiResponse.success(null, "Mascota eliminada exitosamente"));
+        }
+
+        @GetMapping("/{id}/health-card")
+        public ResponseEntity<byte[]> getHealthCard(
+                        @AuthenticationPrincipal Usuario usuario,
+                        @PathVariable Long id) {
+                // Verificar que la mascota pertenece al usuario
+                petService.getPetById(usuario, id);
+                byte[] pdf = healthCardService.generateHealthCard(id);
+                return ResponseEntity.ok()
+                        .contentType(MediaType.APPLICATION_PDF)
+                        .header("Content-Disposition", "attachment; filename=carnet-salud-" + id + ".pdf")
+                        .body(pdf);
         }
 }

@@ -4,6 +4,7 @@ import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.context.annotation.Configuration;
 
+import java.math.BigDecimal;
 import java.util.List;
 
 @Data
@@ -15,6 +16,8 @@ public class AppProperties {
     private Cors cors = new Cors();
     private External external = new External();
     private Notification notification = new Notification();
+    private Business business = new Business();
+    private Ia ia = new Ia();
 
     @Data
     public static class Auth0 {
@@ -83,5 +86,19 @@ public class AppProperties {
     @Data
     public static class Notification {
         private String adminEmail = "admin@huella360.com";
+    }
+
+    @Data
+    public static class Business {
+        private BigDecimal commissionPercentage = new BigDecimal("0.05");
+        private String defaultCountry = "Peru";
+        private String defaultCurrency = "PEN";
+        private String defaultPlanName = "Basico";
+    }
+
+    @Data
+    public static class Ia {
+        private String openaiApiKey;
+        private String openaiModel = "gpt-4o-mini";
     }
 }

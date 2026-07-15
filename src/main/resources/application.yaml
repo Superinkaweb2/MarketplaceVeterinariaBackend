@@ -124,6 +124,16 @@ app:
   notification:
     admin-email: ${ADMIN_EMAIL:admin@huella360.com}
 
+  business:
+    commission-percentage: ${COMMISSION_PERCENTAGE:0.05}
+    default-country: ${DEFAULT_COUNTRY:Peru}
+    default-currency: ${DEFAULT_CURRENCY:PEN}
+    default-plan-name: ${DEFAULT_PLAN_NAME:Basico}
+
+  ia:
+    openai-api-key: ${OPENAI_API_KEY:}
+    openai-model: ${OPENAI_MODEL:gpt-4o-mini}
+
 logging:
   level:
     root: INFO

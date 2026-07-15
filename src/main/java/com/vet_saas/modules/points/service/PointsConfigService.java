@@ -1,5 +1,6 @@
 package com.vet_saas.modules.points.service;
 
+import com.vet_saas.core.exceptions.types.ResourceNotFoundException;
 import com.vet_saas.modules.points.dto.PointsConfigDto;
 import com.vet_saas.modules.points.model.ConfiguracionPuntos;
 import com.vet_saas.modules.points.repository.ConfiguracionPuntosRepository;
@@ -26,7 +27,7 @@ public class PointsConfigService {
     @Transactional
     public PointsConfigDto updateConfig(Long id, Integer puntosOtorgados, Boolean activo) {
         ConfiguracionPuntos config = configRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Configuracion no encontrada"));
+                .orElseThrow(() -> new ResourceNotFoundException("ConfiguracionPuntos", "id", id));
 
         config.setPuntosOtorgados(puntosOtorgados);
         if (activo != null) {

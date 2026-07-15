@@ -46,6 +46,16 @@ public class PaymentController {
         return ResponseEntity.ok(ApiResponse.success(response, "Link de pago generado exitosamente"));
     }
 
+    @PostMapping("/checkout/guest/{orderId}")
+    public ResponseEntity<ApiResponse<PaymentPreferenceResponse>> generateGuestPaymentLink(
+            @PathVariable Long orderId) {
+
+        PaymentPreferenceResponse response = paymentService.createGuestCheckoutUrl(orderId);
+
+        LOGGER.info("Guest checkout link generated orderId={}", orderId);
+        return ResponseEntity.ok(ApiResponse.success(response, "Link de pago generado exitosamente"));
+    }
+
     @PostMapping("/webhook/{empresaId}")
     public ResponseEntity<Void> receiveWebhook(
             @PathVariable String empresaId,
@@ -107,6 +117,7 @@ public class PaymentController {
                     expectedSignature.getBytes(StandardCharsets.UTF_8),
                     xSignature.getBytes(StandardCharsets.UTF_8));
         } catch (Exception e) {
+            // Intentional: any validation error (NPE, crypto failure, malformed header) results in rejection
             LOGGER.error("Error validating webhook signature", e);
             return false;
         }

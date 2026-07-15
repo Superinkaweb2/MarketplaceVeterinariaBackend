@@ -12,7 +12,7 @@ import com.vet_saas.modules.catalog.model.Producto;
 import com.vet_saas.modules.catalog.repository.CategoriaRepository;
 import com.vet_saas.modules.catalog.repository.ProductoRepository;
 import com.vet_saas.modules.company.model.Empresa;
-import com.vet_saas.modules.company.repository.EmpresaRepository;
+import com.vet_saas.modules.company.service.EmpresaLookupService;
 import com.vet_saas.modules.subscription.service.SubscriptionService;
 import com.vet_saas.modules.user.model.Usuario;
 import lombok.RequiredArgsConstructor;
@@ -32,7 +32,7 @@ import java.util.stream.Collectors;
 public class ProductService {
 
     private final ProductoRepository productoRepository;
-    private final EmpresaRepository empresaRepository;
+    private final EmpresaLookupService empresaLookupService;
     private final CategoriaRepository categoriaRepository;
     private final StorageService storageService;
     private final SubscriptionService subscriptionService;
@@ -41,7 +41,7 @@ public class ProductService {
 
     @Transactional
     public ProductResponse createProduct(Usuario usuario, CreateProductDto dto, List<MultipartFile> imageFiles) {
-        Empresa empresa = getEmpresaFromUsuario(usuario);
+        Empresa empresa = empresaLookupService.getEmpresaFromUsuario(usuario);
 
         // Validar límite de suscripción
         long currentCount = productoRepository.countByEmpresaIdAndActivoTrue(empresa.getId());
@@ -50,9 +50,10 @@ public class ProductService {
                     "Has alcanzado el límite de productos permitido por tu plan actual. Considera subir de nivel a un plan superior.");
         }
 
-        if (productoRepository.existsByEmpresaIdAndSku(empresa.getId(), dto.sku())) {
+        String sku = (dto.sku() != null && !dto.sku().isBlank()) ? dto.sku() : generateSku(empresa.getId(), currentCount);
 
-            throw new BusinessException("El SKU " + dto.sku() + " ya está registrado en tu empresa.");
+        if (productoRepository.existsByEmpresaIdAndSku(empresa.getId(), sku)) {
+            throw new BusinessException("El SKU " + sku + " ya está registrado en tu empresa.");
         }
 
         Categoria categoria = categoriaRepository.findByIdAndActivoTrue(dto.categoriaId())
@@ -72,7 +73,7 @@ public class ProductService {
                 .ofertaInicio(dto.ofertaInicio())
                 .ofertaFin(dto.ofertaFin())
                 .stock(dto.stock())
-                .sku(dto.sku())
+                .sku(sku)
                 .visible(dto.visible() != null ? dto.visible() : true)
                 .imagenes(imageUrls)
                 .build();
@@ -80,9 +81,14 @@ public class ProductService {
         return mapToResponse(productoRepository.save(producto));
     }
 
+    private String generateSku(Long empresaId, long currentCount) {
+        long seq = currentCount + 1;
+        return String.format("SKU-%d-%04d", empresaId, seq);
+    }
+
     @Transactional
     public ProductResponse updateProduct(Usuario usuario, Long id, UpdateProductDto dto, List<MultipartFile> newImageFiles, boolean replaceImages) {
-        Empresa empresa = getEmpresaFromUsuario(usuario);
+        Empresa empresa = empresaLookupService.getEmpresaFromUsuario(usuario);
         Producto producto = getProductoPropio(id, empresa.getId());
 
         if (dto.sku() != null && !dto.sku().equals(producto.getSku())) {
@@ -158,7 +164,7 @@ public class ProductService {
 
     @Transactional
     public void softDeleteProduct(Usuario usuario, Long id) {
-        Empresa empresa = getEmpresaFromUsuario(usuario);
+        Empresa empresa = empresaLookupService.getEmpresaFromUsuario(usuario);
         Producto producto = getProductoPropio(id, empresa.getId());
 
         producto.setActivo(false);
@@ -168,7 +174,7 @@ public class ProductService {
 
     @Transactional(readOnly = true)
     public Page<ProductResponse> getMyProducts(Usuario usuario, Pageable pageable) {
-        Empresa empresa = getEmpresaFromUsuario(usuario);
+        Empresa empresa = empresaLookupService.getEmpresaFromUsuario(usuario);
         return productoRepository.findByEmpresaIdAndActivoTrue(empresa.getId(), pageable)
                 .map(this::mapToResponse);
     }
@@ -191,12 +197,6 @@ public class ProductService {
         return productoRepository.findByIdAndEstadoAndVisibleTrueAndActivoTrue(id, EstadoProducto.ACTIVO)
                 .map(this::mapToResponse)
                 .orElseThrow(() -> new ResourceNotFoundException("Producto Marketplace", "id", id));
-    }
-
-    private Empresa getEmpresaFromUsuario(Usuario usuario) {
-        return empresaRepository.findByUsuarioPropietarioId(usuario.getId())
-                .orElseThrow(
-                        () -> new BusinessException("Debes tener una empresa registrada para gestionar productos."));
     }
 
     private Producto getProductoPropio(Long productoId, Long empresaId) {

@@ -34,8 +34,14 @@ public class Orden {
     private String codigoOrden; // Ej: ORD-2026-0001
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "usuario_cliente_id", nullable = false)
+    @JoinColumn(name = "usuario_cliente_id")
     private Usuario usuarioCliente;
+
+    @Column(name = "guest_email")
+    private String guestEmail;
+
+    @Column(name = "guest_nombre")
+    private String guestNombre;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "empresa_id")
@@ -96,6 +102,10 @@ public class Orden {
         // Validar que tenga al menos un vendor
         if (empresa == null && veterinario == null) {
             throw new IllegalStateException("La orden debe tener una Empresa o un Veterinario asociado");
+        }
+        // Validar que tenga usuario autenticado o datos de guest
+        if (usuarioCliente == null && guestEmail == null) {
+            throw new IllegalStateException("La orden debe tener un usuario autenticado o datos de guest (email)");
         }
     }
 }

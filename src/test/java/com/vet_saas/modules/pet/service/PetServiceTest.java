@@ -11,6 +11,7 @@ import com.vet_saas.modules.pet.model.Mascota;
 import com.vet_saas.modules.pet.model.Sexo;
 import com.vet_saas.modules.pet.repository.MascotaRepository;
 import com.vet_saas.modules.points.service.PointsService;
+import com.vet_saas.modules.subscription.service.PlanEnforcementService;
 import com.vet_saas.modules.subscription.service.SubscriptionService;
 import com.vet_saas.modules.user.model.Role;
 import com.vet_saas.modules.user.model.Usuario;
@@ -35,6 +36,7 @@ class PetServiceTest {
     @Mock private MascotaRepository mascotaRepository;
     @Mock private EmpresaRepository empresaRepository;
     @Mock private SubscriptionService subscriptionService;
+    @Mock private PlanEnforcementService planEnforcementService;
     @Mock private PointsService pointsService;
     @Mock private ClienteRepository clienteRepository;
 
@@ -43,7 +45,7 @@ class PetServiceTest {
     @BeforeEach
     void setUp() {
         petService = new PetService(mascotaRepository, empresaRepository,
-                subscriptionService, pointsService, clienteRepository);
+                subscriptionService, planEnforcementService, pointsService, clienteRepository);
     }
 
     private Usuario buildUser(Long id, Role role) {

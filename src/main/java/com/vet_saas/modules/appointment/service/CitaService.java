@@ -1,5 +1,6 @@
 package com.vet_saas.modules.appointment.service;
 
+import com.vet_saas.core.exceptions.types.BusinessException;
 import com.vet_saas.core.exceptions.types.ForbiddenException;
 import com.vet_saas.core.exceptions.types.ResourceNotFoundException;
 import com.vet_saas.modules.appointment.dto.CitaRequest;
@@ -56,6 +57,15 @@ public class CitaService {
         }
 
         LocalTime horaFin = request.getHoraInicio().plusMinutes(servicio.getDuracionMinutos());
+
+        if (veterinario != null) {
+            boolean ocupado = citaRepository.existsOverlap(
+                    veterinario.getId(), request.getFechaProgramada(),
+                    request.getHoraInicio(), horaFin);
+            if (ocupado) {
+                throw new BusinessException("El veterinario no está disponible en ese horario. Seleccione otro horario.");
+            }
+        }
 
         Cita cita = Cita.builder()
                 .cliente(cliente)

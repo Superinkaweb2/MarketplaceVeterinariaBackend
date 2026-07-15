@@ -36,7 +36,7 @@ public class EmailService {
         return new Resend(apiKey);
     }
 
-    private void sendEmail(String to, String subject, String htmlContent) {
+    public void sendEmail(String to, String subject, String htmlContent) {
         try {
             Resend resend = getResendClient();
             String from = appProperties.getExternal().getResend().getFromEmail();

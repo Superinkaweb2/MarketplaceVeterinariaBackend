@@ -9,6 +9,7 @@ import com.vet_saas.modules.catalog.model.Servicio;
 import com.vet_saas.modules.catalog.repository.ServicioRepository;
 import com.vet_saas.modules.company.model.Empresa;
 import com.vet_saas.modules.company.repository.EmpresaRepository;
+import com.vet_saas.modules.subscription.service.PlanEnforcementService;
 import com.vet_saas.modules.user.model.Usuario;
 import com.vet_saas.modules.veterinarian.model.Veterinario;
 import com.vet_saas.modules.veterinarian.repository.VeterinarioRepository;
@@ -25,11 +26,19 @@ public class ServicioService {
     private final ServicioRepository servicioRepository;
     private final EmpresaRepository empresaRepository;
     private final VeterinarioRepository veterinarioRepository;
+    private final PlanEnforcementService planEnforcementService;
     private final com.vet_saas.core.service.StorageService storageService;
 
     @Transactional
     public ServiceResponse createService(Usuario usuario, CreateServiceDto dto,
             org.springframework.web.multipart.MultipartFile imagen) {
+        // Enforce service limits for EMPRESA
+        if (isEmpresa(usuario)) {
+            Empresa empresa = obtenerEmpresa(usuario);
+            long currentCount = servicioRepository.countByEmpresaIdAndActivoTrue(empresa.getId());
+            planEnforcementService.enforceServiceLimit(empresa.getId(), currentCount);
+        }
+
         String imagenUrl = null;
         if (imagen != null && !imagen.isEmpty()) {
             imagenUrl = storageService.uploadFile(imagen, "catalogo/servicios");

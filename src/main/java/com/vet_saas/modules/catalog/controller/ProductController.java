@@ -47,7 +47,7 @@ public class ProductController {
             @RequestParam(defaultValue = "desc") String sort) {
 
         Sort.Direction direction = sort.equalsIgnoreCase("asc") ? Sort.Direction.ASC : Sort.Direction.DESC;
-        Pageable pageable = PageRequest.of(page, size, Sort.by(direction, "createdAt"));
+        Pageable pageable = PageRequest.of(page, Math.min(size, 100), Sort.by(direction, "createdAt"));
 
         Page<ProductResponse> result = productService.getMyProducts(usuario, pageable);
         return ResponseEntity.ok(ApiResponse.success(result, "Productos de la empresa"));

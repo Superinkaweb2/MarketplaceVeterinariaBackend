@@ -23,12 +23,12 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/v1/adoptions")
 @RequiredArgsConstructor
-@PreAuthorize("isAuthenticated()")
 public class AdoptionController {
 
         private final AdoptionService adoptionService;
 
         @PostMapping
+        @PreAuthorize("isAuthenticated()")
         public ResponseEntity<ApiResponse<AdoptionResponse>> publishAdoption(
                         @AuthenticationPrincipal Usuario usuario,
                         @RequestBody @Valid CreateAdoptionDto dto) {
@@ -67,6 +67,7 @@ public class AdoptionController {
         }
 
         @GetMapping("/me")
+        @PreAuthorize("isAuthenticated()")
         public ResponseEntity<ApiResponse<List<AdoptionResponse>>> getMyAdoptions(
                         @AuthenticationPrincipal Usuario usuario) {
                 return ResponseEntity.ok(
@@ -76,6 +77,7 @@ public class AdoptionController {
         }
 
         @GetMapping("/applications/me")
+        @PreAuthorize("isAuthenticated()")
         public ResponseEntity<ApiResponse<List<ApplicationResponse>>> getMySentApplications(
                         @AuthenticationPrincipal Usuario usuario) {
                 return ResponseEntity.ok(
@@ -85,6 +87,7 @@ public class AdoptionController {
         }
 
         @PostMapping("/{id}/apply")
+        @PreAuthorize("isAuthenticated()")
         public ResponseEntity<ApiResponse<Void>> applyForAdoption(
                         @AuthenticationPrincipal Usuario usuario,
                         @PathVariable("id") Long id,
@@ -95,6 +98,7 @@ public class AdoptionController {
         }
 
         @GetMapping("/{id}/applications")
+        @PreAuthorize("isAuthenticated()")
         public ResponseEntity<ApiResponse<List<ApplicationResponse>>> getApplications(
                         @AuthenticationPrincipal Usuario usuario,
                         @PathVariable Long id) {
@@ -105,6 +109,7 @@ public class AdoptionController {
         }
 
         @PatchMapping("/applications/{solicitudId}/response")
+        @PreAuthorize("isAuthenticated()")
         public ResponseEntity<ApiResponse<Void>> respondToApplication(
                         @AuthenticationPrincipal Usuario usuario,
                         @PathVariable Long solicitudId,

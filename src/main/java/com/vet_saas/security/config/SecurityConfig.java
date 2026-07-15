@@ -60,7 +60,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/v1/services", "/api/v1/services/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/subscriptions/plans").permitAll()
                         .requestMatchers("/api/v1/payments/webhook/**").permitAll()
-                        .requestMatchers("/api/v1/ws/**").permitAll()
+                        .requestMatchers("/api/v1/ws/**").authenticated()
                         .requestMatchers("/payment/**").permitAll()
                         .requestMatchers("/error").permitAll()
                         .anyRequest().authenticated())

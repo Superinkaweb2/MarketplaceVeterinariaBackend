@@ -9,6 +9,7 @@ import com.vet_saas.modules.pet.dto.PetResponse;
 import com.vet_saas.modules.pet.dto.UpdatePetDto;
 import com.vet_saas.modules.pet.model.Mascota;
 import com.vet_saas.modules.pet.repository.MascotaRepository;
+import com.vet_saas.modules.subscription.service.PlanEnforcementService;
 import com.vet_saas.modules.subscription.service.SubscriptionService;
 import com.vet_saas.modules.user.model.Role;
 import com.vet_saas.modules.user.model.Usuario;
@@ -32,6 +33,7 @@ public class PetService {
     private final MascotaRepository mascotaRepository;
     private final EmpresaRepository empresaRepository;
     private final SubscriptionService subscriptionService;
+    private final PlanEnforcementService planEnforcementService;
     private final PointsService pointsService;
     private final ClienteRepository clienteRepository;
 
@@ -47,6 +49,12 @@ public class PetService {
                 throw new BusinessException(
                         "Has alcanzado el límite de mascotas permitido por tu plan actual. Mejora tu suscripción para agregar más.");
             }
+        }
+
+        // Validar límite de mascotas para clientes (B2C)
+        if (usuario.getRol() == Role.CLIENTE) {
+            long currentCount = mascotaRepository.countByUsuarioIdAndActivoTrue(usuario.getId());
+            planEnforcementService.enforceMascotaLimit(usuario.getId(), currentCount, "CLIENTE");
         }
 
         Mascota mascota = Mascota.builder()

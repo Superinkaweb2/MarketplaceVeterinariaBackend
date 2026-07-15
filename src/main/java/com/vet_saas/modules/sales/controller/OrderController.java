@@ -18,20 +18,27 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("/api/v1/orders")
 @RequiredArgsConstructor
-@PreAuthorize("isAuthenticated()")
 public class OrderController {
 
     private final OrderService orderService;
 
     @PostMapping
-    @PreAuthorize("hasRole('CLIENTE')")
+    @PreAuthorize("isAuthenticated() and hasRole('CLIENTE')")
     public ResponseEntity<ApiResponse<Long>> createOrder(@RequestBody @Valid CreateOrderDto dto) {
         Long pedidoId = orderService.createOrder(dto);
         return ResponseEntity.ok(
                 ApiResponse.success(pedidoId, "Orden creada exitosamente. Pendiente de pago."));
     }
 
+    @PostMapping("/guest")
+    public ResponseEntity<ApiResponse<Long>> createGuestOrder(@RequestBody @Valid CreateOrderDto dto) {
+        Long pedidoId = orderService.createGuestOrder(dto);
+        return ResponseEntity.ok(
+                ApiResponse.success(pedidoId, "Orden creada exitosamente. Pendiente de pago."));
+    }
+
     @GetMapping("/me")
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ApiResponse<Page<OrderResponseDto>>> getMyOrders(
             @RequestParam(required = false) EstadoOrden estado,
             @RequestParam(required = false) String codigoOrden,
