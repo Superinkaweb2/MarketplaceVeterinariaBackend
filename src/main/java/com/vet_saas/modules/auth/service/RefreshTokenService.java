@@ -10,6 +10,7 @@ import com.vet_saas.modules.user.repository.UsuarioRepository;
 import com.vet_saas.security.jwt.JwtService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -120,7 +121,16 @@ public class RefreshTokenService {
             byte[] hash = digest.digest(token.getBytes(StandardCharsets.UTF_8));
             return Base64.getEncoder().encodeToString(hash);
         } catch (NoSuchAlgorithmException e) {
-            throw new RuntimeException("Error fatal en algoritmo de hash", e);
+            throw new IllegalStateException("SHA-256 no disponible en este entorno", e);
+        }
+    }
+
+    @Scheduled(cron = "0 0 3 * * ?")
+    @Transactional
+    public void cleanupExpiredTokens() {
+        int deleted = refreshTokenRepository.deleteExpiredTokens(Instant.now());
+        if (deleted > 0) {
+            log.info("Cleaned up {} expired refresh tokens", deleted);
         }
     }
 }

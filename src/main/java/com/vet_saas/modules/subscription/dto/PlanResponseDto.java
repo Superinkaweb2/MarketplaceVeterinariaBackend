@@ -19,6 +19,10 @@ public class PlanResponseDto {
     private BigDecimal precioMensual;
     private Integer limiteMascotas;
     private Integer limiteProductos;
+    private Integer limiteServicios;
+    private Integer limiteRecordatorios;
+    private Integer limiteIaUso;
+    private String tipo;
     private boolean activo;
 
     public static PlanResponseDto fromEntity(Plan entity) {
@@ -31,6 +35,10 @@ public class PlanResponseDto {
                 .precioMensual(entity.getPrecioMensual())
                 .limiteMascotas(entity.getLimiteMascotas())
                 .limiteProductos(entity.getLimiteProductos())
+                .limiteServicios(entity.getLimiteServicios())
+                .limiteRecordatorios(entity.getLimiteRecordatorios())
+                .limiteIaUso(entity.getLimiteIaUso())
+                .tipo(entity.getTipo())
                 .activo(entity.isActivo())
                 .build();
     }

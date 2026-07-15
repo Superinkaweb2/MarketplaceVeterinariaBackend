@@ -22,6 +22,7 @@ public class VeterinarioController {
         private final VeterinarioService veterinarioService;
 
         @PostMapping("/profile")
+        @PreAuthorize("hasRole('VETERINARIO')")
         public ResponseEntity<ApiResponse<VeterinarioResponse>> createProfile(
                         @AuthenticationPrincipal Usuario usuario,
                         @RequestBody @Valid VeterinarioRequest request) {
@@ -32,6 +33,7 @@ public class VeterinarioController {
         }
 
         @GetMapping("/me")
+        @PreAuthorize("hasRole('VETERINARIO')")
         public ResponseEntity<ApiResponse<VeterinarioResponse>> getMyProfile(
                         @AuthenticationPrincipal Usuario usuario) {
                 return ResponseEntity.ok(
@@ -50,6 +52,7 @@ public class VeterinarioController {
         }
 
         @GetMapping("/me/patients")
+        @PreAuthorize("hasRole('VETERINARIO')")
         public ResponseEntity<ApiResponse<java.util.List<PetResponse>>> getMyPatients(
                         @AuthenticationPrincipal Usuario usuario) {
                 return ResponseEntity.ok(
@@ -59,6 +62,7 @@ public class VeterinarioController {
         }
 
         @PutMapping("/profile")
+        @PreAuthorize("hasRole('VETERINARIO')")
         public ResponseEntity<ApiResponse<VeterinarioResponse>> updateProfile(
                         @AuthenticationPrincipal Usuario usuario,
                         @RequestBody @Valid VeterinarioRequest request) {

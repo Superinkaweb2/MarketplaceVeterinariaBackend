@@ -1,5 +1,6 @@
 package com.vet_saas.modules.complaint.service;
 
+import com.vet_saas.core.exceptions.types.BusinessException;
 import com.vet_saas.modules.complaint.dto.ReclamoRequestDto;
 import net.sf.jasperreports.engine.*;
 import org.slf4j.Logger;
@@ -81,7 +82,7 @@ public class PdfService { // O JasperPdfService
 
         } catch (Exception e) {
             LOGGER.error("Error al generar el PDF con JasperReports: {}", e.getMessage(), e);
-            throw new RuntimeException("No se pudo generar el PDF del reclamo", e);
+            throw new BusinessException("No se pudo generar el PDF del reclamo");
         }
     }
 }

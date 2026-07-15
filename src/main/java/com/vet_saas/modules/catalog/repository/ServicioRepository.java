@@ -16,6 +16,8 @@ public interface ServicioRepository extends JpaRepository<Servicio, Long> {
         // Queries de listado interno
         Page<Servicio> findByEmpresaIdAndActivoTrue(Long empresaId, Pageable pageable);
 
+        long countByEmpresaIdAndActivoTrue(Long empresaId);
+
         Page<Servicio> findByVeterinarioIdAndActivoTrue(Long veterinarioId, Pageable pageable);
 
         // Queries de acceso individual para edición (validando propiedad)

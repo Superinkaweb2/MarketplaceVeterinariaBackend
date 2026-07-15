@@ -146,7 +146,6 @@ public class VeterinarioService {
                 vet.getFotoPerfilUrl(),
                 vet.getEstadoValidacion(),
                 vet.getUsuario().getCorreo(),
-                vet.getMpAccessToken() != null ? "CONFIGURADO" : null, // Not sending actual token
                 vet.getMpPublicKey());
     }
 }

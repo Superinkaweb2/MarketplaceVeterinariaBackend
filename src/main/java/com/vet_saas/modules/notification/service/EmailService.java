@@ -19,7 +19,7 @@ import org.thymeleaf.TemplateEngine;
 import org.thymeleaf.context.Context;
 
 import java.math.BigDecimal;
-import java.util.Arrays;
+import java.util.Base64;
 
 @Service
 @RequiredArgsConstructor
@@ -36,7 +36,7 @@ public class EmailService {
         return new Resend(apiKey);
     }
 
-    private void sendEmail(String to, String subject, String htmlContent) {
+    public void sendEmail(String to, String subject, String htmlContent) {
         try {
             Resend resend = getResendClient();
             String from = appProperties.getExternal().getResend().getFromEmail();
@@ -64,7 +64,7 @@ public class EmailService {
 
             Attachment attachment = Attachment.builder()
                     .fileName(attachmentName)
-                    .content(Arrays.toString(attachmentContent))
+                    .content(Base64.getEncoder().encodeToString(attachmentContent))
                     .build();
 
             com.resend.services.emails.model.CreateEmailOptions params = com.resend.services.emails.model.CreateEmailOptions.builder()
@@ -100,8 +100,9 @@ public class EmailService {
             // Enviar al cliente
             sendEmailWithAttachment(emailDestino, "Copia de tu Reclamo/Queja - HUELLA360", htmlContent, "Hoja_Reclamacion.pdf", pdfContent);
             
-            // Enviar copia a administración
-            sendEmailWithAttachment("i202332157@cibertec.edu.pe", "NUEVO " + numeroReclamo + " - " + nombreCliente, htmlContent, "Hoja_Reclamacion.pdf", pdfContent);
+            // Enviar copia a administracion
+            String adminEmail = appProperties.getNotification().getAdminEmail();
+            sendEmailWithAttachment(adminEmail, "NUEVO " + numeroReclamo + " - " + nombreCliente, htmlContent, "Hoja_Reclamacion.pdf", pdfContent);
 
         } catch (Exception ex) {
             LOGGER.error("Error preparing reclamo email: {}", ex.getMessage(), ex);
@@ -232,8 +233,9 @@ public class EmailService {
             // 1. Envío directo al cliente afectado
             sendEmail(emailDestino, "Copia de tu Reclamo/Queja - HUELLA360", htmlContent);
 
-            // 2. Envío de copia administrativa a tu cuenta Sandbox autorizada de Resend
-            sendEmail("i202332157@cibertec.edu.pe", "Copia Administrativa: " + numeroReclamo + " - " + nombreCliente, htmlContent);
+            // 2. Envio de copia administrativa a tu cuenta Sandbox autorizada de Resend
+            String adminEmail = appProperties.getNotification().getAdminEmail();
+            sendEmail(adminEmail, "Copia Administrativa: " + numeroReclamo + " - " + nombreCliente, htmlContent);
 
         } catch (Exception ex) {
             LOGGER.error("Error al preparar el correo electrónico del reclamo dinámico: {}", ex.getMessage(), ex);

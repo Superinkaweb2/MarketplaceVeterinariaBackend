@@ -18,6 +18,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/v1/companies/staff")
 @RequiredArgsConstructor
+@PreAuthorize("hasRole('EMPRESA')")
 public class StaffController {
 
     private final StaffService staffService;

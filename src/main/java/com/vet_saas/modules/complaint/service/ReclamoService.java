@@ -2,10 +2,14 @@ package com.vet_saas.modules.complaint.service;
 
 import com.cloudinary.Cloudinary;
 import com.cloudinary.utils.ObjectUtils;
+import com.vet_saas.core.exceptions.types.BusinessException;
+import com.vet_saas.core.exceptions.types.ResourceNotFoundException;
 import com.vet_saas.modules.complaint.dto.ReclamoRequestDto;
+import com.vet_saas.modules.complaint.model.EstadoReclamo;
 import com.vet_saas.modules.complaint.model.Reclamo;
 import com.vet_saas.modules.complaint.repository.ReclamoRepository;
 import com.vet_saas.modules.notification.service.EmailService;
+import com.vet_saas.modules.user.model.Usuario;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -27,7 +31,7 @@ public class ReclamoService {
     private final PdfService pdfService; // Inyectar el nuevo servicio de Jasper
 
     @Transactional
-    public Reclamo registrarReclamo(ReclamoRequestDto dto, MultipartFile archivo) {
+    public String registrarReclamo(Usuario usuario, ReclamoRequestDto dto, MultipartFile archivo) {
         String archivoUrl = null;
 
         // 1. Subir archivo de sustento del cliente (Opcional)
@@ -42,6 +46,7 @@ public class ReclamoService {
 
         // 2. Guardar entidad inicial para conseguir el ID autogenerado
         Reclamo reclamo = Reclamo.builder()
+                .usuario(usuario)
                 .tipoDocumento(dto.getTipoDocumento())
                 .numeroDocumento(dto.getNumeroDocumento())
                 .primerNombre(dto.getPrimerNombre())
@@ -87,7 +92,20 @@ public class ReclamoService {
         String nombreCliente = dto.getPrimerNombre() + " " + dto.getPrimerApellido();
         emailService.sendReclamoEmailConLink(dto.getCorreo(), nombreCliente, "Reclamo N° " + String.format("%06d", reclamo.getId()), pdfUrl);
 
-        return reclamo;
+        return reclamo.getPdfReclamoUrl();
+    }
+
+    @Transactional
+    public Reclamo actualizarEstado(Long reclamoId, EstadoReclamo nuevoEstado, String notasInternas) {
+        Reclamo reclamo = reclamoRepository.findById(reclamoId)
+                .orElseThrow(() -> new ResourceNotFoundException("Reclamo", "id", reclamoId));
+
+        reclamo.setEstado(nuevoEstado);
+        if (notasInternas != null) {
+            reclamo.setNotasInternas(notasInternas);
+        }
+
+        return reclamoRepository.save(reclamo);
     }
 
     private String subirPdfACloudinary(byte[] pdfBytes, Long reclamoId) {
@@ -104,7 +122,7 @@ public class ReclamoService {
             return uploadResult.get("secure_url").toString();
         } catch (Exception e) {
             LOGGER.error("Error al subir el PDF de reclamo a Cloudinary: {}", e.getMessage(), e);
-            throw new RuntimeException("No se pudo guardar el documento generado", e);
+            throw new BusinessException("No se pudo guardar el documento generado");
         }
     }
 }

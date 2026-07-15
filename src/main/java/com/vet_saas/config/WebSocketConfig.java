@@ -5,6 +5,7 @@ import com.vet_saas.modules.user.repository.UsuarioRepository;
 import com.vet_saas.security.jwt.JwtService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.messaging.Message;
 import org.springframework.messaging.MessageChannel;
@@ -19,6 +20,8 @@ import org.springframework.web.socket.config.annotation.EnableWebSocketMessageBr
 import org.springframework.web.socket.config.annotation.StompEndpointRegistry;
 import org.springframework.web.socket.config.annotation.WebSocketMessageBrokerConfigurer;
 
+import java.util.List;
+
 @Slf4j
 @Configuration
 @EnableWebSocketMessageBroker
@@ -27,22 +30,43 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     private final JwtService jwtService;
     private final UsuarioRepository usuarioRepository;
+    private final AppProperties appProperties;
+
+    @Value("${spring.profiles.active:}")
+    private String activeProfile;
+
+    @Value("${spring.data.redis.host:localhost}")
+    private String redisHost;
+
+    @Value("${spring.data.redis.port:6379}")
+    private int redisPort;
 
     @Override
     public void configureMessageBroker(MessageBrokerRegistry config) {
-        // Canal donde el servidor hace broadcast a los clientes
-        config.enableSimpleBroker("/topic", "/queue");
-        // Prefijo para mensajes que van del cliente al servidor
+        if (isProductionProfile()) {
+            config.enableStompBrokerRelay("/topic", "/queue")
+                    .setRelayHost(redisHost)
+                    .setRelayPort(redisPort)
+                    .setClientLogin("guest")
+                    .setClientPasscode("guest")
+                    .setSystemLogin("guest")
+                    .setSystemPasscode("guest");
+        } else {
+            config.enableSimpleBroker("/topic", "/queue");
+        }
         config.setApplicationDestinationPrefixes("/app");
-        // Prefijo para mensajes privados usuario a usuario
         config.setUserDestinationPrefix("/user");
     }
 
     @Override
     public void registerStompEndpoints(StompEndpointRegistry registry) {
-        // Exponemos el endpoint en /api/v1/ws para que haga match con SecurityConfig y Frontend
+        List<String> origins = appProperties.getCors().getAllowedOrigins();
+        String[] allowedOrigins = origins != null && !origins.isEmpty()
+                ? origins.toArray(new String[0])
+                : new String[]{"http://localhost:5173"};
+
         registry.addEndpoint("/api/v1/ws")
-                .setAllowedOriginPatterns("*")
+                .setAllowedOriginPatterns(allowedOrigins)
                 .withSockJS();
     }
 
@@ -76,5 +100,9 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
                 return message;
             }
         });
+    }
+
+    private boolean isProductionProfile() {
+        return activeProfile.contains("prod");
     }
 }

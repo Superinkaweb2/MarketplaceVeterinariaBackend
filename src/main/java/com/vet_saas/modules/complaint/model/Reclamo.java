@@ -4,6 +4,8 @@ import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 
+import com.vet_saas.modules.user.model.Usuario;
+
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
@@ -18,6 +20,10 @@ public class Reclamo {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "usuario_id")
+    private Usuario usuario;
 
     // Datos Reclamante
     private String tipoDocumento;
@@ -60,6 +66,14 @@ public class Reclamo {
 
     @Column(name = "pdf_reclamo_url", columnDefinition = "TEXT")
     private String pdfReclamoUrl;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    @Builder.Default
+    private EstadoReclamo estado = EstadoReclamo.RECIBIDO;
+
+    @Column(columnDefinition = "TEXT")
+    private String notasInternas;
 
     @CreationTimestamp
     private LocalDateTime fechaRegistro;

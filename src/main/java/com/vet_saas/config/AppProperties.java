@@ -4,15 +4,26 @@ import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.context.annotation.Configuration;
 
+import java.math.BigDecimal;
 import java.util.List;
 
 @Data
 @Configuration
 @ConfigurationProperties(prefix = "app")
 public class AppProperties {
+    private Auth0 auth0 = new Auth0();
     private Jwt jwt = new Jwt();
     private Cors cors = new Cors();
     private External external = new External();
+    private Notification notification = new Notification();
+    private Business business = new Business();
+    private Ia ia = new Ia();
+
+    @Data
+    public static class Auth0 {
+        private String issuer;
+        private String audience;
+    }
 
     @Data
     public static class Jwt {
@@ -63,11 +74,31 @@ public class AppProperties {
         private String clientSecret;
         private String sandboxBuyerEmail;
         private boolean sandbox = false;
+        private String webhookSecret;
     }
 
     @Data
     public static class MailProps {
         private String username;
         private String fromEmail;
+    }
+
+    @Data
+    public static class Notification {
+        private String adminEmail = "admin@huella360.com";
+    }
+
+    @Data
+    public static class Business {
+        private BigDecimal commissionPercentage = new BigDecimal("0.05");
+        private String defaultCountry = "Peru";
+        private String defaultCurrency = "PEN";
+        private String defaultPlanName = "Basico";
+    }
+
+    @Data
+    public static class Ia {
+        private String openaiApiKey;
+        private String openaiModel = "gpt-4o-mini";
     }
 }

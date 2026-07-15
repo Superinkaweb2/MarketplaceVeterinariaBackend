@@ -29,7 +29,9 @@ import java.util.stream.Collectors;
 
 import com.vet_saas.modules.points.service.PointsService;
 import com.vet_saas.modules.client.repository.ClienteRepository;
+import lombok.extern.slf4j.Slf4j;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class AdoptionService {
@@ -197,7 +199,7 @@ public class AdoptionService {
                               pointsService.addPoints(perfil.getId(), "ADOPCION", adopcion.getId(), "Bono por darle un hogar a " + mascota.getNombre());
                          });
                      } catch(Exception e) {
-                         System.err.println("Error rewarding adoption points: " + e.getMessage());
+                         log.error("Error rewarding adoption points: {}", e.getMessage());
                      }
                 }
 

@@ -1,5 +1,6 @@
 package com.vet_saas.modules.sales.service;
 
+import com.vet_saas.config.AppProperties;
 import com.vet_saas.core.exceptions.types.BusinessException;
 import com.vet_saas.core.exceptions.types.ResourceNotFoundException;
 import com.vet_saas.modules.catalog.model.Producto;
@@ -37,7 +38,9 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import lombok.extern.slf4j.Slf4j;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class OrderService {
@@ -51,6 +54,7 @@ public class OrderService {
     private final PointsService pointsService;
     private final ClienteRepository clienteRepository;
     private final RewardService rewardService;
+    private final AppProperties appProperties;
 
     @Transactional(readOnly = true)
     public Page<OrderResponseDto> getMyOrdersFiltered(Usuario usuario, EstadoOrden estado, String codigoOrden, String startDate, String endDate, Pageable pageable) {
@@ -73,7 +77,11 @@ public class OrderService {
 
             // Filtro por código de orden
             if (codigoOrden != null && !codigoOrden.isBlank()) {
-                predicates.add(cb.like(cb.lower(root.get("codigoOrden")), "%" + codigoOrden.toLowerCase() + "%"));
+                String escapedCodigo = codigoOrden.toLowerCase()
+                        .replace("\\", "\\\\")
+                        .replace("%", "\\%")
+                        .replace("_", "\\_");
+                predicates.add(cb.like(cb.lower(root.get("codigoOrden")), "%" + escapedCodigo + "%", '\\'));
             }
 
             // Filtro por rango de fechas
@@ -103,24 +111,68 @@ public class OrderService {
     @Transactional
     public Long createOrder(CreateOrderDto dto) {
         String email = SecurityContextHolder.getContext().getAuthentication().getName();
-        Usuario usuario = usuarioRepository.findByCorreo(email).orElseThrow();
+        Usuario usuario = usuarioRepository.findByCorreo(email)
+                .orElseThrow(() -> new ResourceNotFoundException("Usuario", "email", email));
 
-        Empresa empresa = null;
-        Veterinario veterinario = null;
+        Empresa empresa = resolveVendor(dto);
+        Veterinario veterinario = dto.veterinarioId() != null
+                ? veterinarioRepository.findById(dto.veterinarioId())
+                        .orElseThrow(() -> new ResourceNotFoundException("Veterinario", "id", dto.veterinarioId()))
+                : null;
 
-        if (dto.empresaId() != null) {
-            empresa = empresaRepository.findById(dto.empresaId())
-                    .orElseThrow(() -> new ResourceNotFoundException("Empresa", "id", dto.empresaId()));
-        } else if (dto.veterinarioId() != null) {
-            veterinario = veterinarioRepository.findById(dto.veterinarioId())
-                    .orElseThrow(() -> new ResourceNotFoundException("Veterinario", "id", dto.veterinarioId()));
-        } else {
-            throw new BusinessException("Debe indicar una Empresa o un Veterinario para la orden");
+        Orden orden = buildOrder(dto, empresa, veterinario);
+        orden.setUsuarioCliente(usuario);
+
+        processOrderItems(orden, dto, empresa, veterinario);
+        calculateTotals(orden, dto);
+        applyRewardDiscount(orden, dto);
+        ordenRepository.save(orden);
+        linkReward(orden, dto);
+        awardPurchasePoints(orden, usuario);
+
+        return orden.getId();
+    }
+
+    @Transactional
+    public Long createGuestOrder(CreateOrderDto dto) {
+        if (dto.guestEmail() == null || dto.guestEmail().isBlank()) {
+            throw new BusinessException("El email es obligatorio para compras sin sesión");
+        }
+        if (dto.guestNombre() == null || dto.guestNombre().isBlank()) {
+            throw new BusinessException("El nombre es obligatorio para compras sin sesión");
         }
 
-        String codigo = "ORD-" + System.currentTimeMillis();
+        Empresa empresa = resolveVendor(dto);
+        Veterinario veterinario = dto.veterinarioId() != null
+                ? veterinarioRepository.findById(dto.veterinarioId())
+                        .orElseThrow(() -> new ResourceNotFoundException("Veterinario", "id", dto.veterinarioId()))
+                : null;
 
-        // Procesar dirección de envío
+        Orden orden = buildOrder(dto, empresa, veterinario);
+        orden.setGuestEmail(dto.guestEmail());
+        orden.setGuestNombre(dto.guestNombre());
+
+        processOrderItems(orden, dto, empresa, veterinario);
+        calculateTotals(orden, dto);
+        ordenRepository.save(orden);
+
+        return orden.getId();
+    }
+
+    private Empresa resolveVendor(CreateOrderDto dto) {
+        if (dto.empresaId() != null) {
+            return empresaRepository.findById(dto.empresaId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Empresa", "id", dto.empresaId()));
+        }
+        if (dto.veterinarioId() != null) {
+            return null; // veterinario resolved separately
+        }
+        throw new BusinessException("Debe indicar una Empresa o un Veterinario para la orden");
+    }
+
+    private Orden buildOrder(CreateOrderDto dto, Empresa empresa, Veterinario veterinario) {
+        String codigo = "ORD-" + java.util.UUID.randomUUID().toString().substring(0, 8).toUpperCase();
+
         HashMap<String, Object> direccionEnvio = new HashMap<>();
         if (dto.destinoDireccion() != null && !dto.destinoDireccion().isEmpty()) {
             direccionEnvio.put("lat", dto.destinoLat());
@@ -131,17 +183,18 @@ public class OrderService {
             }
         }
 
-        Orden orden = Orden.builder()
+        return Orden.builder()
                 .codigoOrden(codigo)
-                .usuarioCliente(usuario)
                 .empresa(empresa)
                 .veterinario(veterinario)
                 .estado(EstadoOrden.PENDIENTE)
                 .detalles(new ArrayList<>())
                 .direccionEnvio(direccionEnvio)
-                .metodoPago("POR_DEFINIR") // Valor temporal hasta integrar pasarela
+                .metodoPago("POR_DEFINIR")
                 .build();
+    }
 
+    private void processOrderItems(Orden orden, CreateOrderDto dto, Empresa empresa, Veterinario veterinario) {
         BigDecimal subtotalGeneral = BigDecimal.ZERO;
 
         for (OrderItemDto itemDto : dto.items()) {
@@ -150,7 +203,7 @@ public class OrderService {
             Servicio servicio = null;
 
             if (itemDto.productoId() != null) {
-                producto = productoRepository.findById(itemDto.productoId())
+                producto = productoRepository.findByIdForUpdate(itemDto.productoId())
                         .orElseThrow(() -> new ResourceNotFoundException("Producto", "id", itemDto.productoId()));
 
                 if (empresa != null
@@ -167,7 +220,6 @@ public class OrderService {
                 servicio = servicioRepository.findById(itemDto.servicioId())
                         .orElseThrow(() -> new ResourceNotFoundException("Servicio", "id", itemDto.servicioId()));
 
-                // Validar que el servicio pertenezca al vendor seleccionado
                 boolean pertenece = false;
                 if (empresa != null && servicio.getEmpresa() != null
                         && servicio.getEmpresa().getId().equals(empresa.getId())) {
@@ -199,32 +251,36 @@ public class OrderService {
 
             orden.getDetalles().add(detalle);
         }
+    }
+
+    private void calculateTotals(Orden orden, CreateOrderDto dto) {
+        BigDecimal subtotalGeneral = orden.getDetalles().stream()
+                .map(DetalleOrden::getSubtotal)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
 
         orden.setSubtotal(subtotalGeneral);
-        
-        // Si hay costo de envío se asigna, si es null entonces es 0 (retiro en tienda)
+
         BigDecimal costoEnvio = dto.costoEnvio() != null ? dto.costoEnvio() : BigDecimal.ZERO;
         orden.setCostoEnvio(costoEnvio);
-        
-        orden.setComisionPlataforma(subtotalGeneral.multiply(new BigDecimal("0.05"))); // 5% Comision
 
-        // ===== APLICAR DESCUENTO DE RECOMPENSA CANJEADA =====
+        orden.setComisionPlataforma(subtotalGeneral.multiply(appProperties.getBusiness().getCommissionPercentage()));
+    }
+
+    private void applyRewardDiscount(Orden orden, CreateOrderDto dto) {
         BigDecimal descuentoTotal = BigDecimal.ZERO;
         if (dto.canjeRecompensaId() != null) {
             try {
-                com.vet_saas.modules.points.model.CanjeRecompensa canje = 
+                com.vet_saas.modules.points.model.CanjeRecompensa canje =
                     rewardService.getCanjeById(dto.canjeRecompensaId());
-                
+
                 if (canje.getUtilizado()) {
                     throw new BusinessException("Esta recompensa ya fue utilizada");
                 }
-                
+
                 com.vet_saas.modules.points.model.Recompensa recompensa = canje.getRecompensa();
-                
-                // Calcular el descuento basado en el tipo
+
                 if ("PORCENTAJE".equals(recompensa.getTipoDescuento())) {
                     if (Boolean.TRUE.equals(recompensa.getAplicaACiertosProductos()) && recompensa.getProductos() != null) {
-                        // Aplicar solo a productos elegibles
                         for (DetalleOrden detalle : orden.getDetalles()) {
                             if (detalle.getProducto() != null && recompensa.getProductos().stream()
                                      .anyMatch(p -> p.getId().equals(detalle.getProducto().getId()))) {
@@ -235,57 +291,53 @@ public class OrderService {
                             }
                         }
                     } else {
-                        // Aplicar a toda la orden
-                        descuentoTotal = subtotalGeneral
+                        descuentoTotal = orden.getSubtotal()
                              .multiply(recompensa.getValorDescuento())
                              .divide(new BigDecimal("100"), 2, java.math.RoundingMode.HALF_UP);
                     }
                 } else if ("MONTO_FIJO".equals(recompensa.getTipoDescuento())) {
                     descuentoTotal = recompensa.getValorDescuento();
                 }
-                
-                // No permitir descuento mayor al subtotal
-                if (descuentoTotal.compareTo(subtotalGeneral) > 0) {
-                    descuentoTotal = subtotalGeneral;
+
+                if (descuentoTotal.compareTo(orden.getSubtotal()) > 0) {
+                    descuentoTotal = orden.getSubtotal();
                 }
             } catch (BusinessException e) {
                 throw e;
             } catch (Exception e) {
-                System.err.println("Error applying reward discount: " + e.getMessage());
+                log.error("Error applying reward discount: {}", e.getMessage());
             }
         }
-        
+
         orden.setDescuento(descuentoTotal);
-        orden.setTotal(subtotalGeneral.add(costoEnvio).subtract(descuentoTotal));
+        orden.setTotal(orden.getSubtotal().add(orden.getCostoEnvio()).subtract(descuentoTotal));
+    }
 
-        ordenRepository.save(orden);
-        
-        // Mark reward as used after saving order
-        if (dto.canjeRecompensaId() != null && descuentoTotal.compareTo(BigDecimal.ZERO) > 0) {
+    private void linkReward(Orden orden, CreateOrderDto dto) {
+        if (dto.canjeRecompensaId() != null && orden.getDescuento().compareTo(BigDecimal.ZERO) > 0) {
+            rewardService.markRewardAsUsed(dto.canjeRecompensaId(), null);
             try {
-                rewardService.markRewardAsUsed(dto.canjeRecompensaId(), orden.getId());
+                rewardService.linkCanjeToOrder(dto.canjeRecompensaId(), orden.getId());
             } catch (Exception e) {
-                System.err.println("Error marking reward as used: " + e.getMessage());
+                log.error("Error linking reward to order: {}", e.getMessage());
             }
         }
-        
-        // Gamification logic (Earning Points for Purchases)
-        if (usuario.getRol() == Role.CLIENTE) {
-             try {
-                 clienteRepository.findByUsuarioId(usuario.getId()).ifPresent(perfil -> {
-                      // Check if it's the first order
-                      long ordersCount = ordenRepository.findByUsuarioClienteId(usuario.getId(), Pageable.unpaged()).getTotalElements();
-                      if (ordersCount == 1) { // 1 means this is the first one saved
-                          pointsService.addPoints(perfil.getId(), "PRIMERA_COMPRA", orden.getId(), "¡Felicidades por tu primera compra!");
-                      } else {
-                          pointsService.addPoints(perfil.getId(), "COMPRA", orden.getId(), "Puntos por compra #" + orden.getCodigoOrden());
-                      }
-                 });
-             } catch (Exception e) {
-                 System.err.println("Error adding points for purchase: " + e.getMessage());
-             }
-        }
+    }
 
-        return orden.getId();
+    private void awardPurchasePoints(Orden orden, Usuario usuario) {
+        if (usuario.getRol() == Role.CLIENTE) {
+            try {
+                clienteRepository.findByUsuarioId(usuario.getId()).ifPresent(perfil -> {
+                    long ordersCount = ordenRepository.findByUsuarioClienteId(usuario.getId(), Pageable.unpaged()).getTotalElements();
+                    if (ordersCount == 1) {
+                        pointsService.addPoints(perfil.getId(), "PRIMERA_COMPRA", orden.getId(), "¡Felicidades por tu primera compra!");
+                    } else {
+                        pointsService.addPoints(perfil.getId(), "COMPRA", orden.getId(), "Puntos por compra #" + orden.getCodigoOrden());
+                    }
+                });
+            } catch (Exception e) {
+                log.error("Error adding points for purchase: {}", e.getMessage());
+            }
+        }
     }
 }

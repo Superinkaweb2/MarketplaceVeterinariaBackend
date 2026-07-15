@@ -9,6 +9,10 @@ public record CreateOrderDto(
                 Long empresaId,
                 Long veterinarioId,
                 
+                // Guest checkout fields (nullable when authenticated)
+                String guestEmail,
+                String guestNombre,
+                
                 // Campos de Delivery opcionales
                 BigDecimal costoEnvio,
                 BigDecimal destinoLat,

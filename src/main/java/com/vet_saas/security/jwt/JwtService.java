@@ -7,12 +7,15 @@ import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.io.Decoders;
 import io.jsonwebtoken.security.Keys;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import javax.crypto.SecretKey;
+import java.nio.charset.StandardCharsets;
 import java.util.Date;
 import java.util.function.Function;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class JwtService {
@@ -67,12 +70,20 @@ public class JwtService {
                 .before(new Date());
     }
 
-    private Date extractExpiration(String token) {
-        return extractClaim(token, Claims::getExpiration);
-    }
-
     private SecretKey getSignInKey() {
-        byte[] keyBytes = Decoders.BASE64.decode(appProperties.getJwt().getSecret());
+        String secret = appProperties.getJwt().getSecret();
+        byte[] keyBytes;
+        try {
+            keyBytes = Decoders.BASE64.decode(secret);
+        } catch (Exception e) {
+            keyBytes = secret.getBytes(StandardCharsets.UTF_8);
+        }
+
+        if (keyBytes.length < 32) {
+            log.warn("JWT secret key is {} bytes (minimum recommended: 32 bytes). Tokens may be less secure.",
+                    keyBytes.length);
+        }
+
         return Keys.hmacShaKeyFor(keyBytes);
     }
 }

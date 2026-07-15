@@ -21,6 +21,7 @@ import org.springframework.web.multipart.MultipartFile;
 @RestController
 @RequestMapping("/api/v1/companies")
 @RequiredArgsConstructor
+@PreAuthorize("isAuthenticated()")
 public class CompanyController {
 
         private final CompanyService companyService;

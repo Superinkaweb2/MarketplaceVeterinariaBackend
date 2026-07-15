@@ -3,6 +3,8 @@ package com.vet_saas.modules.medical_record.service;
 import com.vet_saas.core.exceptions.types.BusinessException;
 import com.vet_saas.modules.appointment.model.Cita;
 import com.vet_saas.modules.appointment.repository.CitaRepository;
+import com.vet_saas.modules.company.model.Empresa;
+import com.vet_saas.modules.company.repository.EmpresaRepository;
 import com.vet_saas.modules.medical_record.dto.CreateHistoriaClinicaDto;
 import com.vet_saas.modules.medical_record.dto.HistoriaClinicaResponse;
 import com.vet_saas.modules.medical_record.model.HistoriaClinica;
@@ -27,6 +29,7 @@ public class HistoriaClinicaService {
     private final MascotaRepository mascotaRepository;
     private final VeterinarioRepository veterinarioRepository;
     private final CitaRepository citaRepository;
+    private final EmpresaRepository empresaRepository;
 
     @Transactional
     public HistoriaClinicaResponse createEntry(Long userId, CreateHistoriaClinicaDto dto) {
@@ -77,5 +80,19 @@ public class HistoriaClinicaService {
                 h.getPesoKg(),
                 h.getFechaRegistro(),
                 h.getCreatedAt());
+    }
+
+    @Transactional(readOnly = true)
+    public boolean hasVetAccessToPet(Long vetId, Long mascotaId) {
+        return citaRepository.existsByVeterinarioIdAndMascotaId(vetId, mascotaId);
+    }
+
+    @Transactional(readOnly = true)
+    public boolean hasEmpresaAccessToPet(Long usuarioId, Long mascotaId) {
+        Empresa empresa = empresaRepository.findByUsuarioPropietarioId(usuarioId).orElse(null);
+        if (empresa == null) return false;
+        return mascotaRepository.findById(mascotaId)
+                .map(m -> m.getUsuario() != null && m.getUsuario().getId().equals(usuarioId))
+                .orElse(false);
     }
 }

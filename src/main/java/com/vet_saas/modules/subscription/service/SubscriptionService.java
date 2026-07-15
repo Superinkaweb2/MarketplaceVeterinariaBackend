@@ -2,6 +2,7 @@ package com.vet_saas.modules.subscription.service;
 
 import com.vet_saas.core.exceptions.types.ResourceNotFoundException;
 import com.vet_saas.modules.company.model.Empresa;
+import com.vet_saas.modules.company.service.EmpresaLookupService;
 import com.vet_saas.modules.subscription.model.EstadoSuscripcion;
 import com.vet_saas.modules.subscription.model.Plan;
 import com.vet_saas.modules.subscription.model.Suscripcion;
@@ -19,6 +20,7 @@ import java.util.stream.Collectors;
 import com.vet_saas.modules.subscription.dto.SubscriptionUsageDto;
 import com.vet_saas.modules.pet.repository.MascotaRepository;
 import com.vet_saas.modules.catalog.repository.ProductoRepository;
+import com.vet_saas.modules.ia.repository.IaUsageRepository;
 import com.vet_saas.modules.payment.dto.PaymentPreferenceResponse;
 import com.vet_saas.modules.payment.gateway.MercadoPagoGateway;
 import com.mercadopago.client.preference.PreferenceItemRequest;
@@ -35,19 +37,15 @@ public class SubscriptionService {
         private final SuscripcionRepository suscripcionRepository;
         private final PlanRepository planRepository;
         private final ProductoRepository productoRepository;
-        private final com.vet_saas.modules.company.repository.EmpresaRepository empresaRepository;
+        private final EmpresaLookupService empresaLookupService;
         private final com.vet_saas.modules.veterinarian.repository.VeterinarioRepository veterinarioRepository;
         private final MascotaRepository mascotaRepository;
         private final MercadoPagoGateway mercadoPagoGateway;
         private final com.vet_saas.config.AppProperties appProperties;
+        private final IaUsageRepository iaUsageRepository;
 
         private Empresa getEmpresaFromUsuario(com.vet_saas.modules.user.model.Usuario usuario) {
-                return empresaRepository.findByUsuarioPropietarioId(usuario.getId())
-                                .orElseThrow(
-                                                () -> new ResourceNotFoundException(
-                                                                "No se encontró una empresa asociada perfil de usuario: "
-                                                                                + usuario.getCorreo()
-                                                                                + ". Por favor, complete sus datos de empresa."));
+                return empresaLookupService.getEmpresaFromUsuario(usuario);
         }
 
         private com.vet_saas.modules.veterinarian.model.Veterinario getVeterinarioFromUsuario(
@@ -62,6 +60,51 @@ public class SubscriptionService {
                 return planRepository.findAllByActivoTrue().stream()
                                 .map(PlanResponseDto::fromEntity)
                                 .collect(Collectors.toList());
+        }
+
+        @Transactional(readOnly = true)
+        public List<PlanResponseDto> getAvailablePlansByType(String tipo) {
+                return planRepository.findAllByActivoTrue().stream()
+                                .filter(p -> tipo.equals(p.getTipo()))
+                                .map(PlanResponseDto::fromEntity)
+                                .collect(Collectors.toList());
+        }
+
+        @Transactional(readOnly = true)
+        public Suscripcion getSuscripcionByUsuarioId(Long usuarioId) {
+                // Try empresa first
+                var empresaOpt = empresaLookupService.getEmpresaByUsuarioId(usuarioId);
+                if (empresaOpt.isPresent()) {
+                        return suscripcionRepository.findByEmpresaId(empresaOpt.get().getId()).orElse(null);
+                }
+                // Try veterinario
+                var vetOpt = veterinarioRepository.findByUsuarioId(usuarioId);
+                if (vetOpt.isPresent()) {
+                        return suscripcionRepository.findByVeterinarioId(vetOpt.get().getId()).orElse(null);
+                }
+                // Try client (B2C)
+                return suscripcionRepository.findByUsuarioId(usuarioId).orElse(null);
+        }
+
+        @Transactional
+        public Suscripcion assignDefaultPlanForClient(com.vet_saas.modules.user.model.Usuario usuario) {
+                if (suscripcionRepository.findByUsuarioId(usuario.getId()).isPresent()) {
+                        return suscripcionRepository.findByUsuarioId(usuario.getId()).get();
+                }
+
+                Plan freePlan = planRepository.findByNombreIgnoreCase("Huella Básica")
+                                .or(() -> planRepository.findAllByActivoTrue().stream().findFirst())
+                                .orElseThrow(() -> new com.vet_saas.core.exceptions.types.ResourceNotFoundException(
+                                                "No se encontraron planes activos en el sistema."));
+
+                Suscripcion suscripcion = Suscripcion.builder()
+                                .usuario(usuario)
+                                .plan(freePlan)
+                                .fechaInicio(LocalDateTime.now())
+                                .estado(EstadoSuscripcion.ACTIVA)
+                                .build();
+
+                return suscripcionRepository.save(suscripcion);
         }
 
         @Transactional
@@ -80,10 +123,8 @@ public class SubscriptionService {
                 return suscripcionRepository.findByEmpresaId(empresaId)
                                 .orElseGet(() -> {
                                         // Lazy assignment: Si no tiene, buscar empresa y asignar Básico
-                                        com.vet_saas.modules.company.model.Empresa empresa = empresaRepository
-                                                        .findById(empresaId)
-                                                        .orElseThrow(() -> new com.vet_saas.core.exceptions.types.ResourceNotFoundException(
-                                                                        "Empresa no encontrada con ID: " + empresaId));
+                                        com.vet_saas.modules.company.model.Empresa empresa = empresaLookupService
+                                                        .getEmpresaById(empresaId);
                                         return assignDefaultPlan(empresa);
                                 });
         }
@@ -123,7 +164,7 @@ public class SubscriptionService {
                         return suscripcionRepository.findByEmpresaId(empresa.getId()).get();
                 }
 
-                Plan freePlan = planRepository.findByNombreIgnoreCase("Básico")
+                Plan freePlan = planRepository.findByNombreIgnoreCase(appProperties.getBusiness().getDefaultPlanName())
                                 .or(() -> planRepository.findAllByActivoTrue().stream().findFirst())
                                 .orElseThrow(() -> new com.vet_saas.core.exceptions.types.ResourceNotFoundException(
                                                 "No se encontraron planes activos en el sistema."));
@@ -144,7 +185,7 @@ public class SubscriptionService {
                         return suscripcionRepository.findByVeterinarioId(vet.getId()).get();
                 }
 
-                Plan freePlan = planRepository.findByNombreIgnoreCase("Básico")
+                Plan freePlan = planRepository.findByNombreIgnoreCase(appProperties.getBusiness().getDefaultPlanName())
                                 .or(() -> planRepository.findAllByActivoTrue().stream().findFirst())
                                 .orElseThrow(() -> new com.vet_saas.core.exceptions.types.ResourceNotFoundException(
                                                 "No se encontraron planes activos en el sistema."));
@@ -181,6 +222,27 @@ public class SubscriptionService {
                 return updatePlanForOwner(null, veterinarioId, planId);
         }
 
+        @Transactional
+        public SuscripcionResponseDto cancelSubscription(com.vet_saas.modules.user.model.Usuario usuario) {
+                Suscripcion suscripcion;
+                if ("VETERINARIO".equals(usuario.getRol().name())) {
+                        com.vet_saas.modules.veterinarian.model.Veterinario vet = getVeterinarioFromUsuario(usuario);
+                        suscripcion = getSuscripcionEntityByVeterinario(vet.getId());
+                } else {
+                        Empresa empresa = getEmpresaFromUsuario(usuario);
+                        suscripcion = getSuscripcionEntityByEmpresa(empresa.getId());
+                }
+
+                if (suscripcion.getEstado() == EstadoSuscripcion.CANCELADA) {
+                        throw new com.vet_saas.core.exceptions.types.BusinessException("La suscripción ya está cancelada.");
+                }
+
+                suscripcion.setEstado(EstadoSuscripcion.CANCELADA);
+                suscripcion.setUpdatedAt(LocalDateTime.now());
+
+                return SuscripcionResponseDto.fromEntity(suscripcionRepository.save(suscripcion));
+        }
+
         private SuscripcionResponseDto updatePlanForOwner(Long empresaId, Long veterinarioId, Long planId) {
                 Suscripcion suscripcion;
                 if (empresaId != null) {
@@ -202,23 +264,58 @@ public class SubscriptionService {
         /**
          * Verifica si una empresa puede agregar una mascota según su plan.
          * 
+         * @param empresaId   ID de la empresa.
          * @param currentCount Cantidad actual de mascotas activas de la empresa.
+         * @return true si puede agregar, false si alcanzó el límite.
          */
         public boolean canAddMascota(Long empresaId, long currentCount) {
                 Suscripcion sub = getSuscripcionByEmpresa(empresaId);
                 Integer limit = sub.getPlan().getLimiteMascotas();
-                return limit == 0 || currentCount < limit;
+                if (limit == null || limit <= 0) {
+                        return true; // 0 o null = ilimitado
+                }
+                return currentCount < limit;
         }
 
         /**
          * Verifica si una empresa puede agregar un producto según su plan.
          * 
+         * @param empresaId   ID de la empresa.
          * @param currentCount Cantidad actual de productos activos de la empresa.
+         * @return true si puede agregar, false si alcanzó el límite.
          */
         public boolean canAddProduct(Long empresaId, long currentCount) {
                 Suscripcion sub = getSuscripcionByEmpresa(empresaId);
                 Integer limit = sub.getPlan().getLimiteProductos();
-                return limit == 0 || currentCount < limit;
+                if (limit == null || limit <= 0) {
+                        return true; // 0 o null = ilimitado
+                }
+                return currentCount < limit;
+        }
+
+        /**
+         * Verifica si un usuario CLIENTE puede hacer uso de IA según su plan.
+         * Si el plan tiene limiteIaUso == -1 o null, es ilimitado.
+         *
+         * @param usuarioId ID del usuario.
+         * @throws com.vet_saas.core.exceptions.types.BusinessException si alcanzó el límite.
+         */
+        public void enforceIaUsage(Long usuarioId) {
+                Suscripcion sub = suscripcionRepository.findByUsuarioId(usuarioId).orElse(null);
+                if (sub == null || sub.getPlan() == null) {
+                        return; // Sin suscripción, permitir
+                }
+                Integer limit = sub.getPlan().getLimiteIaUso();
+                if (limit == null || limit <= 0) {
+                        return; // -1 o null = ilimitado
+                }
+                java.time.LocalDateTime inicioMes = java.time.LocalDate.now().withDayOfMonth(1).atStartOfDay();
+                long usosMes = iaUsageRepository.countByUsuarioIdSince(usuarioId, inicioMes);
+                if (usosMes >= limit) {
+                        throw new com.vet_saas.core.exceptions.types.BusinessException(
+                                        "Has alcanzado el límite de " + limit + " consultas IA de tu plan este mes. "
+                                                        + "Actualiza tu plan para obtener más consultas.");
+                }
         }
 
         @Transactional(readOnly = true)
@@ -329,9 +426,7 @@ public class SubscriptionService {
 
                 Suscripcion suscripcion;
                 if (empresaId != null) {
-                        Empresa empresa = empresaRepository.findById(empresaId)
-                                        .orElseThrow(() -> new com.vet_saas.core.exceptions.types.ResourceNotFoundException(
-                                                        "Empresa no encontrada con ID: " + empresaId));
+                        Empresa empresa = empresaLookupService.getEmpresaById(empresaId);
                         suscripcion = suscripcionRepository.findByEmpresaId(empresaId)
                                         .orElseGet(() -> Suscripcion.builder()
                                                         .empresa(empresa)
@@ -359,9 +454,10 @@ public class SubscriptionService {
                 LOGGER.info("Suscripción actualizada exitosamente.");
         }
 
-        private double calculatePercentage(long current, int max) {
-                if (max <= 0)
-                        return 0; // Ilimitado o error
+        private double calculatePercentage(long current, Integer max) {
+                if (max == null || max <= 0) {
+                        return 0; // Ilimitado o no configurado
+                }
                 double percent = (double) current / max * 100;
                 return Math.min(percent, 100.0);
         }

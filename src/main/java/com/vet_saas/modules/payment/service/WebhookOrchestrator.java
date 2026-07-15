@@ -34,22 +34,17 @@ public class WebhookOrchestrator {
     public void processWebhookAsync(String paymentId, String pathEmpresaId) {
         LOGGER.info("Iniciando procesamiento asíncrono de webhook. paymentId: {}", paymentId);
 
-        try {
-            String tokenToUse = determineTokenToUse(pathEmpresaId);
+        String tokenToUse = determineTokenToUse(pathEmpresaId);
 
-            Payment payment = mpGateway.getPaymentDetails(paymentId, tokenToUse);
-            Map<String, Object> metadata = payment.getMetadata();
+        Payment payment = mpGateway.getPaymentDetails(paymentId, tokenToUse);
+        Map<String, Object> metadata = payment.getMetadata();
 
-            if (metadata == null) {
-                LOGGER.error("El pago {} no contiene metadata", paymentId);
-                return;
-            }
-
-            paymentService.processPaymentDatabaseTransaction(payment, metadata, pathEmpresaId);
-
-        } catch (Exception ex) {
-            LOGGER.error("Error crítico al procesar el pago asíncrono {}", paymentId, ex);
+        if (metadata == null) {
+            LOGGER.error("El pago {} no contiene metadata", paymentId);
+            return;
         }
+
+        paymentService.processPaymentDatabaseTransaction(payment, metadata, pathEmpresaId);
     }
 
     private String determineTokenToUse(String pathEmpresaId) {

@@ -475,7 +475,7 @@ public class DeliveryService {
                  pointsService.addPoints(perfil.getId(), "CALIFICAR_DELIVERY", delivery.getId(), "Gracias por calificar tu entrega");
             });
         } catch (Exception e) {
-            System.err.println("Error adding points for rating delivery: " + e.getMessage());
+            log.error("Error adding points for rating delivery: {}", e.getMessage());
         }
     }
 

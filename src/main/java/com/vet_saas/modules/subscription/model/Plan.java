@@ -36,6 +36,18 @@ public class Plan {
     @Column(name = "limite_productos")
     private Integer limiteProductos;
 
+    @Column(name = "limite_servicios")
+    private Integer limiteServicios;
+
+    @Column(name = "limite_recordatorios")
+    private Integer limiteRecordatorios;
+
+    @Column(name = "limite_ia_uso")
+    private Integer limiteIaUso;
+
+    @Column(nullable = false)
+    private String tipo;
+
     private boolean activo;
 
     @Column(name = "created_at")

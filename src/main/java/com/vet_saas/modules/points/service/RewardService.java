@@ -1,5 +1,8 @@
 package com.vet_saas.modules.points.service;
 
+import com.vet_saas.core.exceptions.types.BusinessException;
+import com.vet_saas.core.exceptions.types.ForbiddenException;
+import com.vet_saas.core.exceptions.types.ResourceNotFoundException;
 import com.vet_saas.modules.catalog.model.Producto;
 import com.vet_saas.modules.catalog.repository.ProductoRepository;
 import com.vet_saas.modules.company.model.Empresa;
@@ -41,7 +44,7 @@ public class RewardService {
     @Transactional
     public RewardDto createReward(Long idEmpresa, CreateRewardDto dto) {
         Empresa empresa = empresaRepository.findById(idEmpresa)
-                .orElseThrow(() -> new RuntimeException("Empresa no encontrada"));
+                .orElseThrow(() -> new ResourceNotFoundException("Empresa", "id", idEmpresa));
 
         Recompensa recompensa = Recompensa.builder()
                 .empresa(empresa)
@@ -104,10 +107,10 @@ public class RewardService {
 
     private Recompensa getRecompensaAndVerifyOwnership(Long idRecompensa, Long idEmpresa) {
         Recompensa recompensa = recompensaRepository.findById(idRecompensa)
-                .orElseThrow(() -> new RuntimeException("Recompensa no encontrada"));
+                .orElseThrow(() -> new ResourceNotFoundException("Recompensa", "id", idRecompensa));
 
         if (!recompensa.getEmpresa().getId().equals(idEmpresa)) {
-            throw new RuntimeException("No tiene permisos para modificar esta recompensa");
+            throw new ForbiddenException("No tiene permisos para modificar esta recompensa");
         }
         return recompensa;
     }
@@ -115,10 +118,10 @@ public class RewardService {
     @Transactional
     public RedeemedRewardDto redeemReward(Long idPerfil, Long idRecompensa) {
         Recompensa recompensa = recompensaRepository.findById(idRecompensa)
-                .orElseThrow(() -> new RuntimeException("Recompensa no encontrada"));
+                .orElseThrow(() -> new ResourceNotFoundException("Recompensa", "id", idRecompensa));
 
         if (!recompensa.getActivo()) {
-            throw new RuntimeException("La recompensa no esta activa");
+            throw new BusinessException("La recompensa no está activa");
         }
 
         // 1. Deduct points via PointsService (Handles validation of sufficient balance)
@@ -126,7 +129,7 @@ public class RewardService {
 
         // 2. Create Redemption Record
         PuntosCliente cliente = puntosClienteRepository.findById(idPerfil)
-                .orElseThrow(() -> new RuntimeException("Balance de perfil no encontrado"));
+                .orElseThrow(() -> new ResourceNotFoundException("PuntosCliente", "id", idPerfil));
 
         CanjeRecompensa canje = CanjeRecompensa.builder()
                 .puntosCliente(cliente)
@@ -152,22 +155,32 @@ public class RewardService {
     @Transactional(readOnly = true)
     public CanjeRecompensa getCanjeById(Long idCanje) {
         return canjeRepository.findById(idCanje)
-                .orElseThrow(() -> new RuntimeException("Canje no encontrado"));
+                .orElseThrow(() -> new ResourceNotFoundException("CanjeRecompensa", "id", idCanje));
     }
 
     @Transactional
     public void markRewardAsUsed(Long idCanje, Long ordenId) {
         CanjeRecompensa canje = canjeRepository.findById(idCanje)
-                .orElseThrow(() -> new RuntimeException("Canje no encontrado"));
-                
-        Orden orden = ordenRepository.findById(ordenId)
-                .orElseThrow(() -> new RuntimeException("Orden no encontrada"));
+                .orElseThrow(() -> new ResourceNotFoundException("CanjeRecompensa", "id", idCanje));
                 
         canje.setUtilizado(true);
         canje.setFechaUtilizacion(LocalDateTime.now());
-        canje.setOrden(orden);
+        
+        if (ordenId != null) {
+            Orden orden = ordenRepository.findById(ordenId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Orden", "id", ordenId));
+            canje.setOrden(orden);
+        }
         
         canjeRepository.save(canje);
+    }
+
+    @Transactional
+    public void linkCanjeToOrder(Long idCanje, Long ordenId) {
+        canjeRepository.findById(idCanje).ifPresent(canje -> {
+            canje.setOrden(ordenRepository.findById(ordenId).orElse(null));
+            canjeRepository.save(canje);
+        });
     }
 
     private RewardDto mapToDto(Recompensa entity) {

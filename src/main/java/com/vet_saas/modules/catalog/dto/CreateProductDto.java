@@ -21,7 +21,7 @@ public record CreateProductDto(
 
                 @NotNull(message = "El stock es obligatorio") @Min(value = 0) Integer stock,
 
-                @NotBlank(message = "El SKU es obligatorio para control de inventario") String sku,
+                String sku,
 
                 @NotNull(message = "La categoría es obligatoria") Long categoriaId,
 
