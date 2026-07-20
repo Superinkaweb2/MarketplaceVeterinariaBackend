@@ -32,10 +32,11 @@ public class Auth0JwtAuthenticationConverter implements Converter<Jwt, AbstractA
 
     private final UsuarioRepository usuarioRepository;
 
-    // Claim personalizado de Auth0 donde se guarda el email
+    // Claims personalizados de Auth0
     private static final String AUTH0_EMAIL_CLAIM = "https://vet-saas.com/email";
-    // Claim personalizado de Auth0 donde se guarda el rol
+    private static final String AUTH0_EMAIL_CLAIM_ALT = "https://huella360.com/email";
     private static final String AUTH0_ROLES_CLAIM = "https://vet-saas.com/roles";
+    private static final String AUTH0_ROLES_CLAIM_ALT = "https://huella360.com/role";
 
     @Override
     public AbstractAuthenticationToken convert(Jwt jwt) {
@@ -121,8 +122,14 @@ public class Auth0JwtAuthenticationConverter implements Converter<Jwt, AbstractA
     }
 
     private String extractEmailFromAuth0Claims(Jwt jwt) {
-        // Intentar claim personalizado primero
+        // Intentar claim personalizado primero (vet-saas.com)
         String email = jwt.getClaimAsString(AUTH0_EMAIL_CLAIM);
+        if (email != null && !email.isBlank()) {
+            return email;
+        }
+
+        // Intentar claim alternativo (huella360.com)
+        email = jwt.getClaimAsString(AUTH0_EMAIL_CLAIM_ALT);
         if (email != null && !email.isBlank()) {
             return email;
         }
@@ -145,13 +152,23 @@ public class Auth0JwtAuthenticationConverter implements Converter<Jwt, AbstractA
     }
 
     private Role extractRoleFromAuth0Claims(Jwt jwt) {
-        // Intentar claim personalizado de Auth0
+        // Intentar claim personalizado de Auth0 (vet-saas.com)
         List<String> roles = jwt.getClaimAsStringList(AUTH0_ROLES_CLAIM);
         if (roles != null && !roles.isEmpty()) {
             try {
                 return Role.valueOf(roles.get(0).toUpperCase());
             } catch (IllegalArgumentException e) {
                 log.warn("Rol no valido en claim Auth0: {}", roles.get(0));
+            }
+        }
+
+        // Intentar claim alternativo (huella360.com)
+        String roleAlt = jwt.getClaimAsString(AUTH0_ROLES_CLAIM_ALT);
+        if (roleAlt != null && !roleAlt.isBlank()) {
+            try {
+                return Role.valueOf(roleAlt.toUpperCase().replace("ROLE_", ""));
+            } catch (IllegalArgumentException e) {
+                log.warn("Rol no valido en claim alternativo: {}", roleAlt);
             }
         }
 
