@@ -30,9 +30,8 @@ public interface ClienteRepository extends JpaRepository<PerfilCliente, Long> {
                         "JOIN c.usuario u " +
                         "JOIN com.vet_saas.modules.sales.model.Orden o ON o.usuarioCliente.id = u.id " +
                         "WHERE o.empresa.id = :empresaId AND c.activo = true " +
-                        "AND (CAST(:q AS string) IS NULL OR LOWER(c.nombres) LIKE LOWER(CONCAT('%', CAST(:q AS string), '%')) "
-                        +
-                        "     OR LOWER(c.apellidos) LIKE LOWER(CONCAT('%', CAST(:q AS string), '%')))")
+                        "AND (CAST(:q AS text) IS NULL OR LOWER(c.nombres) LIKE LOWER(CONCAT('%', :q, '%')) " +
+                        "     OR LOWER(c.apellidos) LIKE LOWER(CONCAT('%', :q, '%')))")
         Page<PerfilCliente> findClientesByEmpresaId(
                         @Param("empresaId") Long empresaId,
                         @Param("q") String q,

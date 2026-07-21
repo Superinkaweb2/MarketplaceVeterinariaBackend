@@ -27,10 +27,19 @@ public class CryptoUtil {
             throw new IllegalStateException(
                     "Security critical error: app.security.encryption.secret is not configured.");
         }
-        if (secret.length() != 16 && secret.length() != 24 && secret.length() != 32) {
-            secret = String.format("%-32s", secret).substring(0, 32);
+        byte[] keyBytes;
+        try {
+            keyBytes = Base64.getDecoder().decode(secret);
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException(
+                    "app.security.encryption.secret must be a Base64-encoded AES key (16, 24, or 32 bytes when decoded).", e);
         }
-        this.secretKey = new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), "AES");
+        if (keyBytes.length != 16 && keyBytes.length != 24 && keyBytes.length != 32) {
+            throw new IllegalArgumentException(
+                    "app.security.encryption.secret decoded length is " + keyBytes.length
+                    + " bytes. Must be 16, 24, or 32 bytes for AES.");
+        }
+        this.secretKey = new SecretKeySpec(keyBytes, "AES");
     }
 
     public String encrypt(String valueToEnc) {
