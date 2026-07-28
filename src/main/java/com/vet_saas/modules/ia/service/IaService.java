@@ -117,14 +117,14 @@ public class IaService {
     }
 
     private String callOpenAiApi(String prompt) {
-        String apiKey = appProperties.getIa().getOpenaiApiKey();
+        String apiKey = appProperties.getIa().getGroqApiKey();
         if (apiKey == null || apiKey.isBlank()) {
-            log.warn("OpenAI API key not configured, returning null to trigger fallback");
+            log.warn("Groq API key not configured, returning null to trigger fallback");
             return null;
         }
 
-        String model = appProperties.getIa().getOpenaiModel();
-        String apiUrl = "https://api.openai.com/v1/chat/completions";
+        String model = appProperties.getIa().getGroqModel();
+        String apiUrl = "https://api.groq.com/openai/v1/chat/completions";
 
         RestTemplate restTemplate = new RestTemplate();
 
@@ -150,11 +150,22 @@ public class IaService {
 
     private HealthAlertResponse parseAlertsResponse(String response) {
         try {
+            log.debug("Raw IA response: {}", response);
             JsonNode root = objectMapper.readTree(response);
             String content = root.path("choices").get(0).path("message").path("content").asText();
 
+            log.debug("IA content before cleaning: {}", content);
+
             // Clean the response - remove markdown code blocks if present
             content = content.replaceAll("```json\\s*", "").replaceAll("```\\s*", "").trim();
+            // Remove any leading/trailing text that is not JSON
+            int start = content.indexOf('[');
+            int end = content.lastIndexOf(']');
+            if (start >= 0 && end > start) {
+                content = content.substring(start, end + 1);
+            }
+
+            log.debug("IA content after cleaning: {}", content);
 
             JsonNode alertsArray = objectMapper.readTree(content);
             List<HealthAlert> alerts = new ArrayList<>();
@@ -171,41 +182,65 @@ public class IaService {
                 }
             }
 
+            log.info("Parsed {} alerts from IA response", alerts.size());
             return HealthAlertResponse.builder()
                     .alertas(alerts)
                     .resumen("Se generaron " + alerts.size() + " alertas de salud")
                     .alertasGeneradas(alerts.size())
                     .build();
         } catch (Exception e) {
-            log.error("Error parsing IA response: {}", e.getMessage());
+            log.error("Error parsing IA response: {}", e.getMessage(), e);
             return generateDefaultAlerts();
         }
     }
 
     private HealthAlertResponse generateFallbackAlerts(Mascota mascota, HealthAlertRequest request) {
         List<HealthAlert> alerts = new ArrayList<>();
+        String nombre = mascota.getNombre();
+        String especie = mascota.getEspecie();
 
+        // Alerta de peso - solo si tiene peso registrado
         if (mascota.getPesoKg() != null && mascota.getPesoKg().compareTo(java.math.BigDecimal.ZERO) > 0) {
+            String severidadPeso = mascota.getPesoKg().compareTo(new java.math.BigDecimal("30")) > 0 ? "MEDIA" : "BAJA";
             alerts.add(HealthAlert.builder()
                     .tipo("PESO")
-                    .severidad("BAJA")
+                    .severidad(severidadPeso)
                     .titulo("Seguimiento de peso")
-                    .descripcion("Peso actual: " + mascota.getPesoKg() + " kg. Mantenga un registro regular del peso de " + mascota.getNombre() + ".")
+                    .descripcion("Peso actual de " + nombre + ": " + mascota.getPesoKg() + " kg.")
                     .recomendacion("Registre el peso mensualmente y consulte si hay cambios significativos.")
                     .build());
         }
 
+        // Alerta preventiva general - siempre presente
         alerts.add(HealthAlert.builder()
                 .tipo("PREVENTIVA")
                 .severidad("BAJA")
                 .titulo("Recordatorio de chequeo")
-                .descripcion("Es recomendable realizar chequeos regulares para " + mascota.getNombre() + ".")
+                .descripcion("Es recomendable realizar chequeos regulares para " + nombre + ".")
                 .recomendacion("Programe una cita de control cada 6 meses o anualmente.")
+                .build());
+
+        // Alerta de vacunación - siempre recomendar
+        alerts.add(HealthAlert.builder()
+                .tipo("VACUNA")
+                .severidad("MEDIA")
+                .titulo("Vacunas pendientes")
+                .descripcion("Verifique el esquema de vacunación de " + nombre + ".")
+                .recomendacion("Consulte con su veterinario el calendario de vacunación según la especie y edad.")
+                .build());
+
+        // Alerta de desparasitación
+        alerts.add(HealthAlert.builder()
+                .tipo("DESPARASITACION")
+                .severidad("MEDIA")
+                .titulo("Desparasitación")
+                .descripcion("Mantenga al día la desparasitación de " + nombre + ".")
+                .recomendacion("Desparasite cada 3 meses (perros) o cada 6 meses (gatos) según recomendación veterinaria.")
                 .build());
 
         return HealthAlertResponse.builder()
                 .alertas(alerts)
-                .resumen("Alertas generadas por lógica de respaldo")
+                .resumen("Alertas generadas por lógica de respaldo (configurar OPENAI_API_KEY para análisis con IA)")
                 .alertasGeneradas(alerts.size())
                 .build();
     }

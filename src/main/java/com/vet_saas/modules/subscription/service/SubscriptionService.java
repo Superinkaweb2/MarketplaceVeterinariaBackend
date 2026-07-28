@@ -112,6 +112,10 @@ public class SubscriptionService {
                 if ("VETERINARIO".equals(usuario.getRol().name())) {
                         com.vet_saas.modules.veterinarian.model.Veterinario vet = getVeterinarioFromUsuario(usuario);
                         return SuscripcionResponseDto.fromEntity(getSuscripcionEntityByVeterinario(vet.getId()));
+                } else if ("CLIENTE".equals(usuario.getRol().name())) {
+                        return SuscripcionResponseDto.fromEntity(
+                                        suscripcionRepository.findByUsuarioId(usuario.getId())
+                                                        .orElseGet(() -> assignDefaultPlanForClient(usuario)));
                 } else {
                         Empresa empresa = getEmpresaFromUsuario(usuario);
                         return SuscripcionResponseDto.fromEntity(getSuscripcionEntityByEmpresa(empresa.getId()));
@@ -211,6 +215,15 @@ public class SubscriptionService {
                 if ("VETERINARIO".equals(usuario.getRol().name())) {
                         com.vet_saas.modules.veterinarian.model.Veterinario vet = getVeterinarioFromUsuario(usuario);
                         return updatePlanForOwner(null, vet.getId(), planId);
+                } else if ("CLIENTE".equals(usuario.getRol().name())) {
+                        Suscripcion sub = suscripcionRepository.findByUsuarioId(usuario.getId())
+                                        .orElseThrow(() -> new com.vet_saas.core.exceptions.types.ResourceNotFoundException(
+                                                        "No se encontró suscripción para este usuario."));
+                        Plan newPlan = planRepository.findById(planId)
+                                        .orElseThrow(() -> new com.vet_saas.core.exceptions.types.ResourceNotFoundException(
+                                                        "Plan no encontrado con ID: " + planId));
+                        sub.setPlan(newPlan);
+                        return SuscripcionResponseDto.fromEntity(suscripcionRepository.save(sub));
                 } else {
                         Empresa empresa = getEmpresaFromUsuario(usuario);
                         return updatePlanForOwner(empresa.getId(), null, planId);
@@ -228,6 +241,10 @@ public class SubscriptionService {
                 if ("VETERINARIO".equals(usuario.getRol().name())) {
                         com.vet_saas.modules.veterinarian.model.Veterinario vet = getVeterinarioFromUsuario(usuario);
                         suscripcion = getSuscripcionEntityByVeterinario(vet.getId());
+                } else if ("CLIENTE".equals(usuario.getRol().name())) {
+                        suscripcion = suscripcionRepository.findByUsuarioId(usuario.getId())
+                                        .orElseThrow(() -> new com.vet_saas.core.exceptions.types.ResourceNotFoundException(
+                                                        "No se encontró suscripción para este usuario."));
                 } else {
                         Empresa empresa = getEmpresaFromUsuario(usuario);
                         suscripcion = getSuscripcionEntityByEmpresa(empresa.getId());
@@ -320,14 +337,32 @@ public class SubscriptionService {
 
         @Transactional(readOnly = true)
         public SubscriptionUsageDto getUsageMetrics(com.vet_saas.modules.user.model.Usuario usuario) {
-                Empresa empresa = getEmpresaFromUsuario(usuario);
-                Suscripcion sub = getSuscripcionByEmpresa(empresa.getId());
-                Plan plan = sub.getPlan();
+                Suscripcion sub;
+                long petCount;
+                long productCount = 0;
 
-                // El dueño de la empresa es el que posee las mascotas "de la empresa" en este
-                // modelo
-                long petCount = mascotaRepository.countByUsuarioIdAndActivoTrue(usuario.getId());
-                long productCount = productoRepository.countByEmpresaIdAndActivoTrue(empresa.getId());
+                if ("CLIENTE".equals(usuario.getRol().name())) {
+                        sub = suscripcionRepository.findByUsuarioId(usuario.getId()).orElse(null);
+                        petCount = mascotaRepository.countByUsuarioIdAndActivoTrue(usuario.getId());
+                } else {
+                        Empresa empresa = getEmpresaFromUsuario(usuario);
+                        sub = getSuscripcionByEmpresa(empresa.getId());
+                        petCount = mascotaRepository.countByUsuarioIdAndActivoTrue(usuario.getId());
+                        productCount = productoRepository.countByEmpresaIdAndActivoTrue(empresa.getId());
+                }
+
+                if (sub == null) {
+                        return SubscriptionUsageDto.builder()
+                                        .currentPets(petCount)
+                                        .maxPets(0)
+                                        .petPercentage(0)
+                                        .currentProducts(productCount)
+                                        .maxProducts(0)
+                                        .productPercentage(0)
+                                        .build();
+                }
+
+                Plan plan = sub.getPlan();
 
                 return SubscriptionUsageDto.builder()
                                 .currentPets(petCount)
@@ -351,6 +386,10 @@ public class SubscriptionService {
                         entityId = vet.getId();
                         entityName = vet.getNombres() + " " + vet.getApellidos();
                         prefix = "VET";
+                } else if ("CLIENTE".equals(usuario.getRol().name())) {
+                        entityId = usuario.getId();
+                        entityName = usuario.getCorreo();
+                        prefix = "CLI";
                 } else {
                         Empresa empresa = getEmpresaFromUsuario(usuario);
                         entityId = empresa.getId();
@@ -381,14 +420,26 @@ public class SubscriptionService {
                                 .build();
 
                 // Metadata para procesar el pago luego
-                Map<String, Object> metadata = java.util.Map.of(
-                                "type", "SUBSCRIPTION",
-                                prefix.equals("EMP") ? "empresa_id" : "veterinario_id", entityId,
-                                "plan_id", plan.getId(),
-                                "user_id", usuario.getId());
+                Map<String, Object> metadata = new java.util.HashMap<>();
+                metadata.put("type", "SUBSCRIPTION");
+                metadata.put("plan_id", plan.getId());
+                metadata.put("user_id", usuario.getId());
+                if ("EMP".equals(prefix)) {
+                        metadata.put("empresa_id", entityId);
+                } else if ("VET".equals(prefix)) {
+                        metadata.put("veterinario_id", entityId);
+                } else {
+                        metadata.put("usuario_id", entityId);
+                }
 
+                String portalPath = switch (prefix) {
+                        case "EMP" -> "empresa";
+                        case "VET" -> "veterinario";
+                        case "CLI" -> "cliente";
+                        default -> "empresa";
+                };
                 String successUrl = appProperties.getExternal().getFrontendUrl()
-                                + "/portal/" + (prefix.equals("EMP") ? "empresa" : "veterinario") + "/pago-exitoso";
+                                + "/portal/" + portalPath + "/pago-exitoso";
                 String notificationUrl = appProperties.getExternal().getBackendUrl() + "/api/v1/payments/webhook";
 
                 return mercadoPagoGateway.createPreference(
@@ -412,7 +463,7 @@ public class SubscriptionService {
                         suscripcionExistente = getSuscripcionByVeterinario(veterinarioId);
                 }
 
-                if (suscripcionExistente.getMpPreapprovalId() != null &&
+                if (suscripcionExistente != null && suscripcionExistente.getMpPreapprovalId() != null &&
                                 suscripcionExistente.getMpPreapprovalId().equals(mpPaymentId)) {
                         LOGGER.info("El pago {} ya fue procesado. Omitiendo.", mpPaymentId);
                         return;
