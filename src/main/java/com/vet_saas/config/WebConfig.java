@@ -21,6 +21,15 @@ public class WebConfig implements WebMvcConfigurer {
     @Override
     public void addCorsMappings(CorsRegistry registry) {
         List<String> origins = appProperties.getCors().getAllowedOrigins();
+        if (origins != null && !origins.isEmpty()) {
+            // Validate: allowCredentials(true) + "*" origin is not allowed by browsers
+            boolean hasWildcard = origins.contains("*");
+            if (hasWildcard) {
+                throw new IllegalStateException(
+                        "CORS misconfiguration: allowedOrigins contains '*' with allowCredentials(true). "
+                        + "Either remove '*' or set allowCredentials(false).");
+            }
+        }
         String[] allowedOrigins = origins != null && !origins.isEmpty()
                 ? origins.toArray(new String[0])
                 : new String[]{"http://localhost:5173"};

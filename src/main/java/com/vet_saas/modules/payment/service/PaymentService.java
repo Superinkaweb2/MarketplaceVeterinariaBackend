@@ -276,16 +276,24 @@ public class PaymentService {
         Long vendorId = ((Number) metadata.get("vendor_id")).longValue();
         String vendorType = metadata.get("vendor_type") != null ? metadata.get("vendor_type").toString() : "EMPRESA";
 
-        if (pathEmpresaId != null) {
-            String mpVendorKey = "VETERINARIO".equals(vendorType) ? "vet_" + vendorId : vendorId.toString();
-            if (!mpVendorKey.equals(pathEmpresaId)) {
-                LOGGER.error("MIX DE TENANT DETECTADO. mpVendorKey ({}) != pathEmpresaId ({})", mpVendorKey, pathEmpresaId);
-                throw new ForbiddenException("El pago no pertenece a este vendedor.");
-            }
-        }
-
         Orden orden = ordenRepository.findByCodigoOrdenForUpdate(payment.getExternalReference())
                 .orElseThrow(() -> new BusinessException("Orden no encontrada: " + payment.getExternalReference()));
+
+        // Always validate tenant against the actual order data (after acquiring lock)
+        String actualVendorKey;
+        if (orden.getEmpresa() != null) {
+            actualVendorKey = orden.getEmpresa().getId().toString();
+        } else if (orden.getVeterinario() != null) {
+            actualVendorKey = "vet_" + orden.getVeterinario().getId();
+        } else {
+            throw new BusinessException("La orden no tiene vendedor asociado");
+        }
+
+        String mpVendorKey = "VETERINARIO".equals(vendorType) ? "vet_" + vendorId : vendorId.toString();
+        if (!mpVendorKey.equals(actualVendorKey)) {
+            LOGGER.error("Cross-tenant webhook: mpVendorKey ({}) != actualVendorKey ({})", mpVendorKey, actualVendorKey);
+            throw new ForbiddenException("El pago no pertenece a esta orden.");
+        }
 
         String mpStatus = payment.getStatus();
 

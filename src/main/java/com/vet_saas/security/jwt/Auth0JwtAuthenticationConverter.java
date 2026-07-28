@@ -84,7 +84,7 @@ public class Auth0JwtAuthenticationConverter implements Converter<Jwt, AbstractA
                     .correo(email)
                     .password("[AUTH0]")  // Placeholder - Auth0 maneja la contraseña
                     .auth0Sub(jwt.getSubject())
-                    .rol(null)  // Seleccionará rol después
+                    .rol(Role.CLIENTE)  // Default role para Auth0 auto-registro
                     .emailVerificado(true)
                     .build();
             usuario = usuarioRepository.save(usuario);

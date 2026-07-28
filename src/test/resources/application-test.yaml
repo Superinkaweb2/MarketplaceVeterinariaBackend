@@ -37,7 +37,7 @@ app:
     audience: https://api.vetsaastest.com
   security:
     encryption:
-      secret: test-encryption-secret-at-least-32-chars-long
+      secret: QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVoxMjM0NTY=
   cors:
     allowed-origins: http://localhost:5173
   external:

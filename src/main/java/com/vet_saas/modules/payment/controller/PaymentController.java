@@ -1,5 +1,7 @@
 package com.vet_saas.modules.payment.controller;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.vet_saas.config.AppProperties;
 import com.vet_saas.modules.payment.dto.PaymentPreferenceResponse;
 import com.vet_saas.core.response.ApiResponse;
@@ -33,6 +35,7 @@ public class PaymentController {
     private final WebhookOrchestrator webhookOrchestrator;
     private final WebhookEventService webhookEventService;
     private final AppProperties appProperties;
+    private final ObjectMapper objectMapper;
 
     @PostMapping("/checkout/{orderId}")
     @PreAuthorize("hasRole('CLIENTE')")
@@ -60,28 +63,30 @@ public class PaymentController {
     public ResponseEntity<Void> receiveWebhook(
             @PathVariable String empresaId,
             @RequestParam Map<String, String> queryParams,
-            @RequestBody(required = false) Map<String, Object> body,
+            @RequestBody(required = false) String rawBody,
             HttpServletRequest request) {
-        if (!isValidWebhookSignature(request, body)) {
+        if (!isValidWebhookSignature(request, rawBody)) {
             LOGGER.warn("Webhook signature validation failed from {}", request.getRemoteAddr());
             return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).build();
         }
+        Map<String, Object> body = parseRawBody(rawBody);
         return handleWebhook(empresaId, queryParams, body);
     }
 
     @PostMapping("/webhook")
     public ResponseEntity<Void> receivePlatformWebhook(
             @RequestParam Map<String, String> queryParams,
-            @RequestBody(required = false) Map<String, Object> body,
+            @RequestBody(required = false) String rawBody,
             HttpServletRequest request) {
-        if (!isValidWebhookSignature(request, body)) {
+        if (!isValidWebhookSignature(request, rawBody)) {
             LOGGER.warn("Platform webhook signature validation failed from {}", request.getRemoteAddr());
             return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).build();
         }
+        Map<String, Object> body = parseRawBody(rawBody);
         return handleWebhook(null, queryParams, body);
     }
 
-    private boolean isValidWebhookSignature(HttpServletRequest request, Map<String, Object> body) {
+    private boolean isValidWebhookSignature(HttpServletRequest request, String rawBody) {
         String webhookSecret = appProperties.getExternal().getMercadoPago().getWebhookSecret();
         if (webhookSecret == null || webhookSecret.isBlank()) {
             LOGGER.warn("CRITICAL: No webhook secret configured (MP_WEBHOOK_SECRET). Rejecting webhook from {}",
@@ -97,7 +102,7 @@ public class PaymentController {
         }
 
         try {
-            String payload = xTimestamp + ":" + (body != null ? body.toString() : "");
+            String payload = xTimestamp + ":" + (rawBody != null ? rawBody : "");
             String expectedSignature = hmacSha256(webhookSecret, payload);
 
             if (xSignature.contains(",")) {
@@ -120,6 +125,16 @@ public class PaymentController {
             // Intentional: any validation error (NPE, crypto failure, malformed header) results in rejection
             LOGGER.error("Error validating webhook signature", e);
             return false;
+        }
+    }
+
+    private Map<String, Object> parseRawBody(String rawBody) {
+        if (rawBody == null || rawBody.isBlank()) return null;
+        try {
+            return objectMapper.readValue(rawBody, new TypeReference<Map<String, Object>>() {});
+        } catch (Exception e) {
+            LOGGER.error("Error parsing webhook body", e);
+            return null;
         }
     }
 

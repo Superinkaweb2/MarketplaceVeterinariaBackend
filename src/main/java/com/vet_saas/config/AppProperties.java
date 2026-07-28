@@ -100,5 +100,7 @@ public class AppProperties {
     public static class Ia {
         private String openaiApiKey;
         private String openaiModel = "gpt-4o-mini";
+        private String groqApiKey;
+        private String groqModel = "llama-3.3-70b-versatile";
     }
 }

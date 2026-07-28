@@ -7,7 +7,9 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class CryptoUtilTest {
 
-    private final CryptoUtil cryptoUtil = new CryptoUtil("test-encryption-secret-at-least-32-chars-long");
+    private static final String VALID_BASE64_KEY = "QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVoxMjM0NTY=";
+
+    private final CryptoUtil cryptoUtil = new CryptoUtil(VALID_BASE64_KEY);
 
     @Test
     void encrypt_andDecrypt_roundtrip() {
@@ -59,16 +61,19 @@ class CryptoUtilTest {
     }
 
     @Test
-    void encrypt_shortSecret_padsTo32Bytes() {
-        CryptoUtil shortKeyCrypto = new CryptoUtil("short-key");
-        String result = shortKeyCrypto.encrypt("test");
-        assertNotNull(result);
-        assertEquals("test", shortKeyCrypto.decrypt(result));
-    }
-
-    @Test
     void constructor_blankSecret_throwsIllegalState() {
         assertThrows(IllegalStateException.class, () -> new CryptoUtil(""));
         assertThrows(IllegalStateException.class, () -> new CryptoUtil(null));
+    }
+
+    @Test
+    void constructor_invalidBase64_throwsIllegalArgument() {
+        assertThrows(IllegalArgumentException.class, () -> new CryptoUtil("not-valid-base64!!!"));
+    }
+
+    @Test
+    void constructor_wrongKeyLength_throwsIllegalArgument() {
+        String shortKey = java.util.Base64.getEncoder().encodeToString("short".getBytes());
+        assertThrows(IllegalArgumentException.class, () -> new CryptoUtil(shortKey));
     }
 }

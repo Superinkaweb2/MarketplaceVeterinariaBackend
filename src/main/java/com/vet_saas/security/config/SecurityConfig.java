@@ -92,6 +92,13 @@ public class SecurityConfig {
 
         List<String> origins = appProperties.getCors().getAllowedOrigins();
         if (origins != null && !origins.isEmpty()) {
+            // Validate: allowCredentials(true) + "*" origin is not allowed by browsers
+            boolean hasWildcard = origins.contains("*");
+            if (hasWildcard) {
+                throw new IllegalStateException(
+                        "CORS misconfiguration: allowedOrigins contains '*' with allowCredentials(true). "
+                        + "Either remove '*' or set allowCredentials(false).");
+            }
             configuration.setAllowedOrigins(origins);
         } else {
             configuration.addAllowedOrigin("http://localhost:5173");
