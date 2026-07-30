@@ -122,7 +122,7 @@ app:
       from-email: ${RESEND_FROM:onboarding@resend.dev}
 
   notification:
-    admin-email: ${ADMIN_EMAIL:admin@huella360.com}
+    admin-email: ${ADMIN_EMAIL:hola@huella360.com}
 
   business:
     commission-percentage: ${COMMISSION_PERCENTAGE:0.05}

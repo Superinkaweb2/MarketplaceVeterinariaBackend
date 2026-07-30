@@ -19,6 +19,8 @@ import org.thymeleaf.TemplateEngine;
 import org.thymeleaf.context.Context;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.Base64;
 
 @Service
@@ -239,6 +241,36 @@ public class EmailService {
 
         } catch (Exception ex) {
             LOGGER.error("Error al preparar el correo electrónico del reclamo dinámico: {}", ex.getMessage(), ex);
+        }
+    }
+
+    @Async("mailExecutor")
+    public void sendNewsletterConfirmation(String email) {
+        try {
+            Context context = new Context();
+            context.setVariable("subscriberEmail", email);
+
+            String htmlContent = templateEngine.process("email/newsletter-confirmacion", context);
+            sendEmail(email, "¡Gracias por suscribirte a Huella360!", htmlContent);
+
+        } catch (Exception ex) {
+            LOGGER.error("Error sending newsletter confirmation email to {}: {}", email, ex.getMessage(), ex);
+        }
+    }
+
+    @Async("mailExecutor")
+    public void sendNewsletterAdminNotification(String subscriberEmail) {
+        try {
+            String adminEmail = appProperties.getNotification().getAdminEmail();
+            Context context = new Context();
+            context.setVariable("subscriberEmail", subscriberEmail);
+            context.setVariable("subscriptionDate", LocalDateTime.now().format(DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm")));
+
+            String htmlContent = templateEngine.process("email/newsletter-admin-notification", context);
+            sendEmail(adminEmail, "Nueva suscripción al newsletter - " + subscriberEmail, htmlContent);
+
+        } catch (Exception ex) {
+            LOGGER.error("Error sending newsletter admin notification for {}: {}", subscriberEmail, ex.getMessage(), ex);
         }
     }
 }
