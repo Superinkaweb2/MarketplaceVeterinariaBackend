@@ -62,6 +62,8 @@ public class RateLimitFilter extends OncePerRequestFilter {
             limit = Bandwidth.simple(10, Duration.ofMinutes(1));
         } else if (key.contains("/reclamos")) {
             limit = Bandwidth.simple(5, Duration.ofMinutes(1));
+        } else if (key.contains("/newsletter/subscribe")) {
+            limit = Bandwidth.simple(3, Duration.ofMinutes(1));
         } else {
             limit = Bandwidth.simple(30, Duration.ofMinutes(1));
         }
@@ -87,6 +89,7 @@ public class RateLimitFilter extends OncePerRequestFilter {
         return !path.startsWith("/api/v1/auth/")
                 && !path.startsWith("/api/v1/payments/webhook")
                 && !path.startsWith("/api/v1/payments/checkout")
-                && !path.startsWith("/api/v1/reclamos");
+                && !path.startsWith("/api/v1/reclamos")
+                && !path.startsWith("/api/v1/newsletter");
     }
 }
