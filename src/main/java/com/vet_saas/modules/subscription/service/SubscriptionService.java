@@ -313,9 +313,10 @@ public class SubscriptionService {
         /**
          * Verifica si un usuario CLIENTE puede hacer uso de IA según su plan.
          * Si el plan tiene limiteIaUso == -1 o null, es ilimitado.
+         * Si el plan tiene limiteIaUso == 0, no tiene acceso a IA.
          *
          * @param usuarioId ID del usuario.
-         * @throws com.vet_saas.core.exceptions.types.BusinessException si alcanzó el límite.
+         * @throws com.vet_saas.core.exceptions.types.BusinessException si alcanzó el límite o no tiene acceso.
          */
         public void enforceIaUsage(Long usuarioId) {
                 Suscripcion sub = suscripcionRepository.findByUsuarioId(usuarioId).orElse(null);
@@ -323,8 +324,13 @@ public class SubscriptionService {
                         return; // Sin suscripción, permitir
                 }
                 Integer limit = sub.getPlan().getLimiteIaUso();
-                if (limit == null || limit <= 0) {
+                if (limit == null || limit < 0) {
                         return; // -1 o null = ilimitado
+                }
+                if (limit == 0) {
+                        throw new com.vet_saas.core.exceptions.types.BusinessException(
+                                        "Tu plan " + sub.getPlan().getNombre() + " no incluye acceso al asistente de IA. "
+                                                        + "Actualiza tu plan para obtener consultas IA.");
                 }
                 java.time.LocalDateTime inicioMes = java.time.LocalDate.now().withDayOfMonth(1).atStartOfDay();
                 long usosMes = iaUsageRepository.countByUsuarioIdSince(usuarioId, inicioMes);
