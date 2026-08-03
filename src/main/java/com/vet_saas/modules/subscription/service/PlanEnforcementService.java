@@ -61,6 +61,27 @@ public class PlanEnforcementService {
     }
 
     @Transactional(readOnly = true)
+    public void enforceProductLimit(Long empresaId, long currentCount) {
+        Suscripcion sub = subscriptionService.getSuscripcionEntityByEmpresa(empresaId);
+        if (sub == null) return;
+        Plan plan = sub.getPlan();
+        Integer limit = plan.getLimiteProductos();
+        if (limit == null || limit < 0) {
+            return; // -1 o null = ilimitado
+        }
+        if (limit == 0) {
+            throw new BusinessException(
+                    "Tu plan " + plan.getNombre() + " no incluye productos. "
+                            + "Actualiza tu plan para agregar productos.");
+        }
+        if (currentCount >= limit) {
+            throw new BusinessException(
+                    "Has alcanzado el límite de " + limit + " producto(s) de tu plan " +
+                            plan.getNombre() + ". Actualiza tu plan para agregar más.");
+        }
+    }
+
+    @Transactional(readOnly = true)
     public void enforceServiceLimitForVeterinario(Long veterinarioId, long currentCount) {
         Suscripcion sub = subscriptionService.getSuscripcionEntityByVeterinario(veterinarioId);
         if (sub == null) return;

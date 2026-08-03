@@ -30,6 +30,9 @@ public interface ProductoRepository extends JpaRepository<Producto, Long> {
 
         long countByEmpresaIdAndActivoTrue(Long empresaId);
 
+        @Query(value = "SELECT COALESCE(MAX(CAST(SUBSTRING(sku FROM LENGTH(CONCAT('SKU-', :empresaId, '-')) + 1 AS UNSIGNED)), 0) FROM productos WHERE empresa_id = :empresaId AND sku LIKE CONCAT('SKU-', :empresaId, '-%')", nativeQuery = true)
+        long findMaxSkuSequence(@Param("empresaId") Long empresaId);
+
         // Endpoint individual público
         Optional<Producto> findByIdAndEstadoAndVisibleTrueAndActivoTrue(Long id, EstadoProducto estado);
 

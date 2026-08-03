@@ -5,6 +5,7 @@ import com.vet_saas.core.exceptions.types.ForbiddenException;
 import com.vet_saas.core.exceptions.types.ResourceNotFoundException;
 import com.vet_saas.modules.appointment.dto.CitaRequest;
 import com.vet_saas.modules.appointment.dto.CitaResponse;
+import com.vet_saas.modules.appointment.dto.CrearCitaEmpresaRequest;
 import com.vet_saas.modules.appointment.model.AppointmentStatus;
 import com.vet_saas.modules.appointment.model.Cita;
 import com.vet_saas.modules.appointment.repository.CitaRepository;
@@ -16,11 +17,15 @@ import com.vet_saas.modules.catalog.model.Servicio;
 import com.vet_saas.modules.catalog.repository.ServicioRepository;
 import com.vet_saas.modules.user.model.Role;
 import com.vet_saas.modules.user.model.Usuario;
+import com.vet_saas.modules.user.repository.UsuarioRepository;
 import com.vet_saas.modules.veterinarian.model.Veterinario;
 import com.vet_saas.modules.veterinarian.repository.VeterinarioRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.util.UUID;
 
 import java.time.LocalTime;
 import java.util.List;
@@ -35,6 +40,8 @@ public class CitaService {
     private final ServicioRepository servicioRepository;
     private final EmpresaRepository empresaRepository;
     private final VeterinarioRepository veterinarioRepository;
+    private final UsuarioRepository usuarioRepository;
+    private final PasswordEncoder passwordEncoder;
 
     @Transactional
     public CitaResponse crearCita(Usuario cliente, CitaRequest request) {
@@ -78,6 +85,85 @@ public class CitaService {
                 .horaFin(horaFin)
                 .estado(AppointmentStatus.SOLICITADA)
                 .notasCliente(request.getNotasCliente())
+                .build();
+
+        return CitaResponse.fromEntity(citaRepository.save(cita));
+    }
+
+    @Transactional
+    public CitaResponse crearCitaParaCliente(Usuario empresaUsuario, CrearCitaEmpresaRequest request) {
+        Empresa empresa = empresaRepository.findByUsuarioPropietarioId(empresaUsuario.getId())
+                .orElseThrow(() -> new ResourceNotFoundException("Empresa no encontrada"));
+
+        Servicio servicio = servicioRepository.findById(request.getServicioId())
+                .orElseThrow(() -> new ResourceNotFoundException("Servicio no encontrado"));
+
+        String guestEmail = null;
+        String guestNombre = null;
+        String guestTelefono = null;
+        Usuario cliente;
+
+        if (request.getClienteId() != null) {
+            cliente = usuarioRepository.findById(request.getClienteId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Cliente no encontrado"));
+        } else if (request.getGuestEmail() != null && !request.getGuestEmail().isBlank()) {
+            guestEmail = request.getGuestEmail().trim().toLowerCase();
+            guestNombre = request.getGuestNombre() != null ? request.getGuestNombre().trim() : null;
+            guestTelefono = request.getGuestTelefono() != null ? request.getGuestTelefono().trim() : null;
+            final String finalGuestEmail = guestEmail;
+
+            cliente = usuarioRepository.findByCorreo(finalGuestEmail).orElseGet(() -> {
+                Usuario nuevo = Usuario.builder()
+                        .correo(finalGuestEmail)
+                        .password(passwordEncoder.encode(UUID.randomUUID().toString()))
+                        .rol(Role.CLIENTE)
+                        .estado(true)
+                        .emailVerificado(false)
+                        .build();
+                return usuarioRepository.save(nuevo);
+            });
+        } else {
+            throw new BusinessException("Se requiere un cliente registrado o datos de un invitado (email)");
+        }
+
+        Mascota mascota = null;
+        if (request.getMascotaId() != null) {
+            mascota = mascotaRepository.findById(request.getMascotaId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Mascota no encontrada"));
+        }
+
+        Veterinario veterinario = null;
+        if (request.getVeterinarioId() != null) {
+            veterinario = veterinarioRepository.findById(request.getVeterinarioId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Veterinario no encontrado"));
+        }
+
+        LocalTime horaFin = request.getHoraInicio().plusMinutes(servicio.getDuracionMinutos());
+
+        if (veterinario != null) {
+            boolean ocupado = citaRepository.existsOverlap(
+                    veterinario.getId(), request.getFechaProgramada(),
+                    request.getHoraInicio(), horaFin);
+            if (ocupado) {
+                throw new BusinessException("El veterinario no está disponible en ese horario.");
+            }
+        }
+
+        Cita cita = Cita.builder()
+                .cliente(cliente)
+                .mascota(mascota)
+                .servicio(servicio)
+                .empresa(empresa)
+                .veterinario(veterinario)
+                .fechaProgramada(request.getFechaProgramada())
+                .horaInicio(request.getHoraInicio())
+                .horaFin(horaFin)
+                .estado(AppointmentStatus.SOLICITADA)
+                .notasCliente(request.getNotasCliente())
+                .notasInternas(request.getNotasInternas())
+                .guestNombre(guestNombre)
+                .guestEmail(guestEmail)
+                .guestTelefono(guestTelefono)
                 .build();
 
         return CitaResponse.fromEntity(citaRepository.save(cita));

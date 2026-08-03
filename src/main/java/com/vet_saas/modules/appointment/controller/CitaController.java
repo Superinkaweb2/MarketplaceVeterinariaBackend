@@ -4,6 +4,7 @@ import com.vet_saas.core.exceptions.types.ForbiddenException;
 import com.vet_saas.core.response.ApiResponse;
 import com.vet_saas.modules.appointment.dto.CitaRequest;
 import com.vet_saas.modules.appointment.dto.CitaResponse;
+import com.vet_saas.modules.appointment.dto.CrearCitaEmpresaRequest;
 import com.vet_saas.modules.appointment.model.AppointmentStatus;
 import com.vet_saas.modules.appointment.service.CitaService;
 import com.vet_saas.modules.company.model.Empresa;
@@ -38,6 +39,16 @@ public class CitaController {
         return ResponseEntity.ok(ApiResponse.success(
                 citaService.crearCita(usuario, request),
                 "Cita solicitada exitosamente"));
+    }
+
+    @PostMapping("/empresa")
+    @PreAuthorize("hasRole('EMPRESA')")
+    public ResponseEntity<ApiResponse<CitaResponse>> crearCitaParaCliente(
+            @AuthenticationPrincipal Usuario usuario,
+            @RequestBody @Valid CrearCitaEmpresaRequest request) {
+        return ResponseEntity.ok(ApiResponse.success(
+                citaService.crearCitaParaCliente(usuario, request),
+                "Cita creada exitosamente"));
     }
 
     @GetMapping("/empresa/{empresaId}")

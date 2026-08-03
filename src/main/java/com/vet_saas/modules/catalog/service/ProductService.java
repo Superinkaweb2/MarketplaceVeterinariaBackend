@@ -82,8 +82,8 @@ public class ProductService {
     }
 
     private String generateSku(Long empresaId, long currentCount) {
-        long seq = currentCount + 1;
-        return String.format("SKU-%d-%04d", empresaId, seq);
+        String uuid = java.util.UUID.randomUUID().toString().replace("-", "").substring(0, 8).toUpperCase();
+        return "SKU-" + uuid;
     }
 
     @Transactional

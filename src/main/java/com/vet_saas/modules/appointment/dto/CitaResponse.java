@@ -26,11 +26,22 @@ public class CitaResponse {
     private AppointmentStatus estado;
     private String notasCliente;
     private String notasInternas;
+    private String guestNombre;
+    private String guestEmail;
+    private String guestTelefono;
 
     public static CitaResponse fromEntity(Cita cita) {
+        boolean isGuest = cita.getGuestEmail() != null;
+        String nombreCliente;
+        if (isGuest) {
+            nombreCliente = cita.getGuestNombre() != null ? cita.getGuestNombre() : cita.getGuestEmail();
+        } else {
+            nombreCliente = cita.getCliente().getCorreo();
+        }
+
         return CitaResponse.builder()
                 .id(cita.getId())
-                .clienteNombre(cita.getCliente().getCorreo()) // Simplified for now
+                .clienteNombre(nombreCliente)
                 .mascotaNombre(cita.getMascota() != null ? cita.getMascota().getNombre() : "N/A")
                 .servicioNombre(cita.getServicio().getNombre())
                 .veterinarioNombre(cita.getVeterinario() != null
@@ -42,6 +53,9 @@ public class CitaResponse {
                 .estado(cita.getEstado())
                 .notasCliente(cita.getNotasCliente())
                 .notasInternas(cita.getNotasInternas())
+                .guestNombre(cita.getGuestNombre())
+                .guestEmail(cita.getGuestEmail())
+                .guestTelefono(cita.getGuestTelefono())
                 .build();
     }
 }

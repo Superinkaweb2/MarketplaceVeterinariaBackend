@@ -13,4 +13,8 @@ public class SubscriptionUsageDto {
     private long currentProducts;
     private int maxProducts;
     private double productPercentage;
+
+    private long currentServices;
+    private int maxServices;
+    private double servicePercentage;
 }
