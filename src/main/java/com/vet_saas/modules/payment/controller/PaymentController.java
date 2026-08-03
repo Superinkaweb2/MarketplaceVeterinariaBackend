@@ -38,7 +38,7 @@ public class PaymentController {
     private final ObjectMapper objectMapper;
 
     @PostMapping("/checkout/{orderId}")
-    @PreAuthorize("hasRole('CLIENTE')")
+    @PreAuthorize("hasAnyRole('CLIENTE', 'EMPRESA', 'VETERINARIO')")
     public ResponseEntity<ApiResponse<PaymentPreferenceResponse>> generatePaymentLink(
             @PathVariable Long orderId,
             @AuthenticationPrincipal Usuario usuarioActual) {

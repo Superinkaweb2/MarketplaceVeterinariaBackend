@@ -26,9 +26,20 @@ public class PublicProductController {
             @RequestParam(defaultValue = "10") int size,
             @RequestParam(defaultValue = "desc") String sort) {
 
-        Sort.Direction direction = sort.equalsIgnoreCase("asc") ? Sort.Direction.ASC : Sort.Direction.DESC;
-        Pageable pageable = PageRequest.of(page, Math.min(size, 100), Sort.by(direction, "createdAt"));
+        String field = "createdAt";
+        Sort.Direction direction = Sort.Direction.DESC;
 
+        if (sort != null && !sort.isBlank()) {
+            String[] parts = sort.split(",");
+            if (parts.length == 2) {
+                field = parts[0].trim();
+                direction = parts[1].trim().equalsIgnoreCase("asc") ? Sort.Direction.ASC : Sort.Direction.DESC;
+            } else if (sort.equalsIgnoreCase("asc")) {
+                direction = Sort.Direction.ASC;
+            }
+        }
+
+        Pageable pageable = PageRequest.of(page, Math.min(size, 100), Sort.by(direction, field));
         Page<ProductResponse> result = productService.getPublicProducts(q, category, pageable);
         return ResponseEntity.ok(ApiResponse.success(result, "Resultados de la búsqueda"));
     }

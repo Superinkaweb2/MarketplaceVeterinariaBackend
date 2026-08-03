@@ -12,6 +12,7 @@ import org.springframework.stereotype.Repository;
 import jakarta.persistence.LockModeType;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 import com.vet_saas.modules.sales.model.EstadoOrden;
 
@@ -75,4 +76,22 @@ public interface OrdenRepository extends JpaRepository<Orden, Long>, JpaSpecific
 
         @Query("SELECT COALESCE(SUM(o.total), 0) FROM Orden o WHERE o.estado = :estado")
         BigDecimal sumTotalByEstado(@Param("estado") EstadoOrden estado);
+
+        @Query(value = "SELECT DATE(created_at) AS fecha, COALESCE(SUM(total), 0) AS total_ventas, COUNT(*) AS num_ventas " +
+                        "FROM ordenes " +
+                        "WHERE empresa_id = :empresaId " +
+                        "AND estado = 'PAGADO' " +
+                        "AND created_at >= :fechaInicio " +
+                        "GROUP BY DATE(created_at) " +
+                        "ORDER BY DATE(created_at) ASC", nativeQuery = true)
+        List<Object[]> findVentasDiariasRaw(
+                        @Param("empresaId") Long empresaId,
+                        @Param("fechaInicio") LocalDateTime fechaInicio);
+
+        @Query("SELECT o FROM Orden o " +
+                        "JOIN FETCH o.usuarioCliente " +
+                        "WHERE o.empresa.id = :empresaId " +
+                        "ORDER BY o.createdAt DESC")
+        List<Orden> findRecentByEmpresa(@Param("empresaId") Long empresaId,
+                        org.springframework.data.domain.Pageable pageable);
 }

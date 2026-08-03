@@ -76,6 +76,15 @@ public class Cita {
     @Column(name = "notas_internas", columnDefinition = "TEXT")
     private String notasInternas;
 
+    @Column(name = "guest_nombre", length = 200)
+    private String guestNombre;
+
+    @Column(name = "guest_email", length = 255)
+    private String guestEmail;
+
+    @Column(name = "guest_telefono", length = 20)
+    private String guestTelefono;
+
     @Column(name = "created_at")
     private LocalDateTime createdAt;
 

@@ -40,6 +40,7 @@ public class SubscriptionService {
         private final EmpresaLookupService empresaLookupService;
         private final com.vet_saas.modules.veterinarian.repository.VeterinarioRepository veterinarioRepository;
         private final MascotaRepository mascotaRepository;
+        private final com.vet_saas.modules.catalog.repository.ServicioRepository servicioRepository;
         private final MercadoPagoGateway mercadoPagoGateway;
         private final com.vet_saas.config.AppProperties appProperties;
         private final IaUsageRepository iaUsageRepository;
@@ -287,9 +288,13 @@ public class SubscriptionService {
          */
         public boolean canAddMascota(Long empresaId, long currentCount) {
                 Suscripcion sub = getSuscripcionByEmpresa(empresaId);
+                if (sub == null) return true;
                 Integer limit = sub.getPlan().getLimiteMascotas();
-                if (limit == null || limit <= 0) {
-                        return true; // 0 o null = ilimitado
+                if (limit == null || limit < 0) {
+                        return true; // -1 o null = ilimitado
+                }
+                if (limit == 0) {
+                        return false; // 0 = no incluido
                 }
                 return currentCount < limit;
         }
@@ -299,13 +304,17 @@ public class SubscriptionService {
          * 
          * @param empresaId   ID de la empresa.
          * @param currentCount Cantidad actual de productos activos de la empresa.
-         * @return true si puede agregar, false si alcanzó el límite.
+         * @return true si puede agregar, false si alcanzó el límite o no incluido.
          */
         public boolean canAddProduct(Long empresaId, long currentCount) {
                 Suscripcion sub = getSuscripcionByEmpresa(empresaId);
+                if (sub == null) return true;
                 Integer limit = sub.getPlan().getLimiteProductos();
-                if (limit == null || limit <= 0) {
-                        return true; // 0 o null = ilimitado
+                if (limit == null || limit < 0) {
+                        return true; // -1 o null = ilimitado
+                }
+                if (limit == 0) {
+                        return false; // 0 = no incluido
                 }
                 return currentCount < limit;
         }
@@ -313,9 +322,10 @@ public class SubscriptionService {
         /**
          * Verifica si un usuario CLIENTE puede hacer uso de IA según su plan.
          * Si el plan tiene limiteIaUso == -1 o null, es ilimitado.
+         * Si el plan tiene limiteIaUso == 0, no tiene acceso a IA.
          *
          * @param usuarioId ID del usuario.
-         * @throws com.vet_saas.core.exceptions.types.BusinessException si alcanzó el límite.
+         * @throws com.vet_saas.core.exceptions.types.BusinessException si alcanzó el límite o no tiene acceso.
          */
         public void enforceIaUsage(Long usuarioId) {
                 Suscripcion sub = suscripcionRepository.findByUsuarioId(usuarioId).orElse(null);
@@ -323,8 +333,13 @@ public class SubscriptionService {
                         return; // Sin suscripción, permitir
                 }
                 Integer limit = sub.getPlan().getLimiteIaUso();
-                if (limit == null || limit <= 0) {
+                if (limit == null || limit < 0) {
                         return; // -1 o null = ilimitado
+                }
+                if (limit == 0) {
+                        throw new com.vet_saas.core.exceptions.types.BusinessException(
+                                        "Tu plan " + sub.getPlan().getNombre() + " no incluye acceso al asistente de IA. "
+                                                        + "Actualiza tu plan para obtener consultas IA.");
                 }
                 java.time.LocalDateTime inicioMes = java.time.LocalDate.now().withDayOfMonth(1).atStartOfDay();
                 long usosMes = iaUsageRepository.countByUsuarioIdSince(usuarioId, inicioMes);
@@ -340,6 +355,7 @@ public class SubscriptionService {
                 Suscripcion sub;
                 long petCount;
                 long productCount = 0;
+                long serviceCount = 0;
 
                 if ("CLIENTE".equals(usuario.getRol().name())) {
                         sub = suscripcionRepository.findByUsuarioId(usuario.getId()).orElse(null);
@@ -349,6 +365,7 @@ public class SubscriptionService {
                         sub = getSuscripcionByEmpresa(empresa.getId());
                         petCount = mascotaRepository.countByUsuarioIdAndActivoTrue(usuario.getId());
                         productCount = productoRepository.countByEmpresaIdAndActivoTrue(empresa.getId());
+                        serviceCount = servicioRepository.countByEmpresaIdAndActivoTrue(empresa.getId());
                 }
 
                 if (sub == null) {
@@ -359,6 +376,9 @@ public class SubscriptionService {
                                         .currentProducts(productCount)
                                         .maxProducts(0)
                                         .productPercentage(0)
+                                        .currentServices(serviceCount)
+                                        .maxServices(0)
+                                        .servicePercentage(0)
                                         .build();
                 }
 
@@ -371,6 +391,9 @@ public class SubscriptionService {
                                 .currentProducts(productCount)
                                 .maxProducts(plan.getLimiteProductos())
                                 .productPercentage(calculatePercentage(productCount, plan.getLimiteProductos()))
+                                .currentServices(serviceCount)
+                                .maxServices(plan.getLimiteServicios())
+                                .servicePercentage(calculatePercentage(serviceCount, plan.getLimiteServicios()))
                                 .build();
         }
 

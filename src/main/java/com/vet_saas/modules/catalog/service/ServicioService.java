@@ -32,11 +32,15 @@ public class ServicioService {
     @Transactional
     public ServiceResponse createService(Usuario usuario, CreateServiceDto dto,
             org.springframework.web.multipart.MultipartFile imagen) {
-        // Enforce service limits for EMPRESA
+        // Enforce service limits for EMPRESA and VETERINARIO
         if (isEmpresa(usuario)) {
             Empresa empresa = obtenerEmpresa(usuario);
             long currentCount = servicioRepository.countByEmpresaIdAndActivoTrue(empresa.getId());
             planEnforcementService.enforceServiceLimit(empresa.getId(), currentCount);
+        } else if (isVeterinario(usuario)) {
+            Veterinario veterinario = obtenerVeterinario(usuario);
+            long currentCount = servicioRepository.countByVeterinarioIdAndActivoTrue(veterinario.getId());
+            planEnforcementService.enforceServiceLimitForVeterinario(veterinario.getId(), currentCount);
         }
 
         String imagenUrl = null;

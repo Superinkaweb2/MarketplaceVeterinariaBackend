@@ -14,8 +14,13 @@ import java.util.List;
 @AllArgsConstructor
 public class DashboardMetricsDto {
     private BigDecimal totalVentasMes;
+    private BigDecimal ventasSemana;
+    private BigDecimal ventasMesAnterior;
     private Long ordenesPendientes;
     private Long ordenesPagadasHoy;
     private Long clientesActivos;
+    private Long citasHoy;
+    private Long citasPendientes;
     private List<TopProductoDto> topProductos;
+    private List<TopServicioDto> topServicios;
 }

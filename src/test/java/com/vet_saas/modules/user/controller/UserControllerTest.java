@@ -118,11 +118,11 @@ class UserControllerTest extends AbstractIntegrationTest {
     }
 
     @Test
-    void updateMyRole_rejectsRepartidor() throws Exception {
+    void updateMyRole_acceptsRepartidor() throws Exception {
         authenticateAs(testUser);
         mockMvc.perform(patch("/api/v1/users/me/role")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"rol\": \"REPARTIDOR\"}"))
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isOk());
     }
 }

@@ -24,10 +24,18 @@ public class PlanEnforcementService {
         Suscripcion sub = subscriptionService.getSuscripcionByUsuarioId(usuarioId);
         if (sub == null) return;
         Integer limit = sub.getPlan().getLimiteMascotas();
-        if (limit != null && limit > 0 && currentCount >= limit) {
+        if (limit == null || limit < 0) {
+            return; // -1 o null = ilimitado
+        }
+        if (limit == 0) {
+            throw new BusinessException(
+                    "Tu plan " + sub.getPlan().getNombre() + " no incluye mascotas. "
+                            + "Mejora tu suscripción para agregar mascotas.");
+        }
+        if (currentCount >= limit) {
             throw new BusinessException(
                     "Has alcanzado el límite de " + limit + " mascota(s) de tu plan " +
-                    sub.getPlan().getNombre() + ". Mejora tu suscripción para agregar más.");
+                            sub.getPlan().getNombre() + ". Mejora tu suscripción para agregar más.");
         }
     }
 
@@ -37,10 +45,60 @@ public class PlanEnforcementService {
         if (sub == null) return;
         Plan plan = sub.getPlan();
         Integer limit = plan.getLimiteServicios();
-        if (limit != null && limit > 0 && currentCount >= limit) {
+        if (limit == null || limit < 0) {
+            return; // -1 o null = ilimitado
+        }
+        if (limit == 0) {
+            throw new BusinessException(
+                    "Tu plan " + plan.getNombre() + " no incluye servicios. "
+                            + "Actualiza tu plan para agregar servicios.");
+        }
+        if (currentCount >= limit) {
             throw new BusinessException(
                     "Has alcanzado el límite de " + limit + " servicio(s) de tu plan " +
-                    plan.getNombre() + ". Actualiza tu plan para agregar más.");
+                            plan.getNombre() + ". Actualiza tu plan para agregar más.");
+        }
+    }
+
+    @Transactional(readOnly = true)
+    public void enforceProductLimit(Long empresaId, long currentCount) {
+        Suscripcion sub = subscriptionService.getSuscripcionEntityByEmpresa(empresaId);
+        if (sub == null) return;
+        Plan plan = sub.getPlan();
+        Integer limit = plan.getLimiteProductos();
+        if (limit == null || limit < 0) {
+            return; // -1 o null = ilimitado
+        }
+        if (limit == 0) {
+            throw new BusinessException(
+                    "Tu plan " + plan.getNombre() + " no incluye productos. "
+                            + "Actualiza tu plan para agregar productos.");
+        }
+        if (currentCount >= limit) {
+            throw new BusinessException(
+                    "Has alcanzado el límite de " + limit + " producto(s) de tu plan " +
+                            plan.getNombre() + ". Actualiza tu plan para agregar más.");
+        }
+    }
+
+    @Transactional(readOnly = true)
+    public void enforceServiceLimitForVeterinario(Long veterinarioId, long currentCount) {
+        Suscripcion sub = subscriptionService.getSuscripcionEntityByVeterinario(veterinarioId);
+        if (sub == null) return;
+        Plan plan = sub.getPlan();
+        Integer limit = plan.getLimiteServicios();
+        if (limit == null || limit < 0) {
+            return; // -1 o null = ilimitado
+        }
+        if (limit == 0) {
+            throw new BusinessException(
+                    "Tu plan " + plan.getNombre() + " no incluye servicios. "
+                            + "Actualiza tu plan para agregar servicios.");
+        }
+        if (currentCount >= limit) {
+            throw new BusinessException(
+                    "Has alcanzado el límite de " + limit + " servicio(s) de tu plan " +
+                            plan.getNombre() + ". Actualiza tu plan para agregar más.");
         }
     }
 
@@ -49,10 +107,18 @@ public class PlanEnforcementService {
         Suscripcion sub = subscriptionService.getSuscripcionByUsuarioId(usuarioId);
         if (sub == null) return;
         Integer limit = sub.getPlan().getLimiteRecordatorios();
-        if (limit != null && limit > 0 && currentCount >= limit) {
+        if (limit == null || limit < 0) {
+            return; // -1 o null = ilimitado
+        }
+        if (limit == 0) {
+            throw new BusinessException(
+                    "Tu plan " + sub.getPlan().getNombre() + " no incluye recordatorios. "
+                            + "Actualiza tu plan para crear recordatorios.");
+        }
+        if (currentCount >= limit) {
             throw new BusinessException(
                     "Has alcanzado el límite de " + limit + " recordatorio(s) de tu plan " +
-                    sub.getPlan().getNombre() + ". Actualiza tu plan para crear más.");
+                            sub.getPlan().getNombre() + ". Actualiza tu plan para crear más.");
         }
     }
 
@@ -61,10 +127,18 @@ public class PlanEnforcementService {
         Suscripcion sub = subscriptionService.getSuscripcionByUsuarioId(usuarioId);
         if (sub == null) return;
         Integer limit = sub.getPlan().getLimiteIaUso();
-        if (limit != null && limit > 0 && currentUsage >= limit) {
+        if (limit == null || limit < 0) {
+            return; // -1 o null = ilimitado
+        }
+        if (limit == 0) {
+            throw new BusinessException(
+                    "Tu plan " + sub.getPlan().getNombre() + " no incluye acceso al asistente de IA. "
+                            + "Actualiza tu plan para obtener consultas IA.");
+        }
+        if (currentUsage >= limit) {
             throw new BusinessException(
                     "Has alcanzado el límite de " + limit + " consulta(s) de IA de tu plan " +
-                    sub.getPlan().getNombre() + ". Actualiza tu plan para continuar.");
+                            sub.getPlan().getNombre() + ". Actualiza tu plan para continuar.");
         }
     }
 

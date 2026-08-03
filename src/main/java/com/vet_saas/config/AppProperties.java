@@ -93,7 +93,7 @@ public class AppProperties {
         private BigDecimal commissionPercentage = new BigDecimal("0.05");
         private String defaultCountry = "Peru";
         private String defaultCurrency = "PEN";
-        private String defaultPlanName = "Basico";
+        private String defaultPlanName = "Huella Free B2B";
     }
 
     @Data
