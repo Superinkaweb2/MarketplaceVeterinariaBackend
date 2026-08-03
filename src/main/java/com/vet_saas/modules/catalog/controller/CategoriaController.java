@@ -28,6 +28,13 @@ public class CategoriaController {
                 "Categorías recuperadas con éxito"));
     }
 
+    @GetMapping("/parents")
+    public ResponseEntity<ApiResponse<List<CategoriaResponse>>> getParentCategories() {
+        return ResponseEntity.ok(ApiResponse.success(
+                categoriaService.getParentCategories(),
+                "Categorías padre recuperadas con éxito"));
+    }
+
     @GetMapping("/{padreId}/subcategories")
     public ResponseEntity<ApiResponse<List<CategoriaResponse>>> getSubcategories(@PathVariable Long padreId) {
         return ResponseEntity.ok(ApiResponse.success(

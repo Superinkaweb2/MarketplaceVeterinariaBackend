@@ -18,5 +18,7 @@ public interface CategoriaRepository extends JpaRepository<Categoria, Long> {
 
     List<Categoria> findByActivoTrueOrderByOrdenAsc();
 
+    List<Categoria> findByPadreIsNullAndActivoTrueOrderByOrdenAsc();
+
     List<Categoria> findByPadreIdAndActivoTrueOrderByOrdenAsc(Long padreId);
 }

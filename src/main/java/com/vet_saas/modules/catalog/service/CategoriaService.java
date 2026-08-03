@@ -31,6 +31,14 @@ public class CategoriaService {
                 .collect(Collectors.toList());
     }
 
+    @Cacheable(value = "categorias", key = "'parents'")
+    @Transactional(readOnly = true)
+    public List<CategoriaResponse> getParentCategories() {
+        return categoriaRepository.findByPadreIsNullAndActivoTrueOrderByOrdenAsc().stream()
+                .map(this::mapToResponse)
+                .collect(Collectors.toList());
+    }
+
     @Cacheable(value = "categorias", key = "'sub_' + #padreId")
     @Transactional(readOnly = true)
     public List<CategoriaResponse> getActiveSubcategories(Long padreId) {
