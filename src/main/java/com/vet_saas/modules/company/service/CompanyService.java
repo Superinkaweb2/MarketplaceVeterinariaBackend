@@ -15,9 +15,11 @@ import com.vet_saas.modules.veterinarian.model.VerificationStatus;
 import com.vet_saas.modules.pet.dto.PetResponse;
 import com.vet_saas.modules.pet.repository.MascotaRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class CompanyService {
@@ -112,10 +114,18 @@ public class CompanyService {
 
     @Transactional(readOnly = true)
     public CompanyResponse getProfile(Usuario usuario) {
+        log.info("getProfile called for usuario: id={}, correo={}, rol={}", usuario.getId(), usuario.getCorreo(), usuario.getRol());
+        
+        boolean exists = empresaRepository.existsByUsuarioPropietarioId(usuario.getId());
+        log.info("existsByUsuarioPropietarioId for usuarioId={}: {}", usuario.getId(), exists);
+        
         Empresa empresa = empresaRepository.findByUsuarioPropietarioId(usuario.getId())
-                .orElseThrow(() -> new BusinessException(
-                        "No se ha encontrado un perfil de empresa asociado a este usuario."));
+                .orElseThrow(() -> {
+                    log.warn("No empresa found for usuarioId={}, correo={}", usuario.getId(), usuario.getCorreo());
+                    return new ResourceNotFoundException("Empresa", "usuario", usuario.getId());
+                });
 
+        log.info("Empresa found: id={}, nombreComercial={}", empresa.getId(), empresa.getNombreComercial());
         return mapToResponse(empresa);
     }
 
