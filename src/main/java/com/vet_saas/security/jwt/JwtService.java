@@ -37,9 +37,7 @@ public class JwtService {
     }
 
     public Long extractUserId(String token) {
-        Long userId = Long.parseLong(extractClaim(token, Claims::getSubject));
-        log.debug("Extracted userId={} from JWT", userId);
-        return userId;
+        return Long.parseLong(extractClaim(token, Claims::getSubject));
     }
 
     public String extractRole(String token) {
