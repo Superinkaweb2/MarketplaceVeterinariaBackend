@@ -36,9 +36,9 @@ class CompanyControllerTest extends AbstractIntegrationTest {
 
     @Test
     @WithMockUsuario(role = Role.EMPRESA)
-    void getMyCompany_returns400_whenNoProfile() throws Exception {
+    void getMyCompany_returns404_whenNoProfile() throws Exception {
         mockMvc.perform(get("/api/v1/companies/me"))
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isNotFound());
     }
 
     @Test
