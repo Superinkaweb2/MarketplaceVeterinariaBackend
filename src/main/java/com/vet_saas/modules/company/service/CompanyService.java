@@ -113,9 +113,7 @@ public class CompanyService {
     @Transactional(readOnly = true)
     public CompanyResponse getProfile(Usuario usuario) {
         Empresa empresa = empresaRepository.findByUsuarioPropietarioId(usuario.getId())
-                .orElseThrow(() -> new BusinessException(
-                        "No se ha encontrado un perfil de empresa asociado a este usuario."));
-
+                .orElseThrow(() -> new ResourceNotFoundException("Empresa", "usuario", usuario.getId()));
         return mapToResponse(empresa);
     }
 

@@ -169,7 +169,10 @@ public class SubscriptionService {
                         return suscripcionRepository.findByEmpresaId(empresa.getId()).get();
                 }
 
-                Plan freePlan = planRepository.findByNombreIgnoreCase(appProperties.getBusiness().getDefaultPlanName())
+                // Preferir planes específicos para B2B/Empresa, buscar "Huella Free B2B" o "Huella Free" primero
+                Plan freePlan = planRepository.findByNombreIgnoreCase("Huella Free B2B")
+                                .or(() -> planRepository.findByNombreIgnoreCase("Huella Free"))
+                                .or(() -> planRepository.findByNombreIgnoreCase(appProperties.getBusiness().getDefaultPlanName()))
                                 .or(() -> planRepository.findAllByActivoTrue().stream().findFirst())
                                 .orElseThrow(() -> new com.vet_saas.core.exceptions.types.ResourceNotFoundException(
                                                 "No se encontraron planes activos en el sistema."));
@@ -190,7 +193,10 @@ public class SubscriptionService {
                         return suscripcionRepository.findByVeterinarioId(vet.getId()).get();
                 }
 
-                Plan freePlan = planRepository.findByNombreIgnoreCase(appProperties.getBusiness().getDefaultPlanName())
+                // Preferir planes específicos para B2B/Empresa, buscar "Huella Free B2B" o "Huella Free" primero
+                Plan freePlan = planRepository.findByNombreIgnoreCase("Huella Free B2B")
+                                .or(() -> planRepository.findByNombreIgnoreCase("Huella Free"))
+                                .or(() -> planRepository.findByNombreIgnoreCase(appProperties.getBusiness().getDefaultPlanName()))
                                 .or(() -> planRepository.findAllByActivoTrue().stream().findFirst())
                                 .orElseThrow(() -> new com.vet_saas.core.exceptions.types.ResourceNotFoundException(
                                                 "No se encontraron planes activos en el sistema."));
