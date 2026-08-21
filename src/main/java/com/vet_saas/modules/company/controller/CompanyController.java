@@ -82,6 +82,7 @@ public class CompanyController {
         }
 
         @GetMapping("/public")
+        @PreAuthorize("permitAll()")
         public ResponseEntity<ApiResponse<org.springframework.data.domain.Page<CompanyResponse>>> getAllPublicCompanies(
                         org.springframework.data.domain.Pageable pageable) {
                 return ResponseEntity.ok(
@@ -91,6 +92,7 @@ public class CompanyController {
         }
 
         @GetMapping("/public/{id}")
+        @PreAuthorize("permitAll()")
         public ResponseEntity<ApiResponse<CompanyResponse>> getPublicCompany(@PathVariable Long id) {
                 return ResponseEntity.ok(
                                 ApiResponse.success(
