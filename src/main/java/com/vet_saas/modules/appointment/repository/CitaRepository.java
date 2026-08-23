@@ -59,4 +59,10 @@ public interface CitaRepository extends JpaRepository<Cita, Long> {
             "WHERE c.empresa.id = :empresaId " +
             "ORDER BY c.createdAt DESC")
     List<Cita> findRecentByEmpresa(@Param("empresaId") Long empresaId, Pageable pageable);
+
+    @Query("SELECT c.cliente.id, COUNT(c), COALESCE(SUM(c.servicio.precio), 0), MAX(c.fechaProgramada) " +
+            "FROM Cita c " +
+            "WHERE c.empresa.id = :empresaId " +
+            "GROUP BY c.cliente.id")
+    List<Object[]> findCitaSummaryByEmpresa(@Param("empresaId") Long empresaId);
 }

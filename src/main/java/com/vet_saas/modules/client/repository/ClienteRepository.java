@@ -26,12 +26,20 @@ public interface ClienteRepository extends JpaRepository<PerfilCliente, Long> {
                         "LOWER(c.apellidos) LIKE LOWER(CONCAT('%', :q, '%')))")
         Page<PerfilCliente> searchByNombre(@Param("q") String q, Pageable pageable);
 
-        @Query("SELECT DISTINCT c FROM PerfilCliente c " +
+        @Query(value = "SELECT DISTINCT c FROM PerfilCliente c " +
                         "JOIN c.usuario u " +
-                        "JOIN com.vet_saas.modules.sales.model.Orden o ON o.usuarioCliente.id = u.id " +
-                        "WHERE o.empresa.id = :empresaId AND c.activo = true " +
-                        "AND (CAST(:q AS text) IS NULL OR LOWER(c.nombres) LIKE LOWER(CONCAT('%', :q, '%')) " +
-                        "     OR LOWER(c.apellidos) LIKE LOWER(CONCAT('%', :q, '%')))")
+                        "WHERE c.activo = true " +
+                        "AND (EXISTS (SELECT 1 FROM Orden o WHERE o.usuarioCliente.id = u.id AND o.empresa.id = :empresaId) " +
+                        "     OR EXISTS (SELECT 1 FROM Cita ci WHERE ci.cliente.id = u.id AND ci.empresa.id = :empresaId)) " +
+                        "AND (CAST(:q AS text) IS NULL OR LOWER(c.nombres) LIKE LOWER(CONCAT('%', CAST(:q AS text), '%')) " +
+                        "     OR LOWER(c.apellidos) LIKE LOWER(CONCAT('%', CAST(:q AS text), '%')))",
+                        countQuery = "SELECT COUNT(DISTINCT c) FROM PerfilCliente c " +
+                        "JOIN c.usuario u " +
+                        "WHERE c.activo = true " +
+                        "AND (EXISTS (SELECT 1 FROM Orden o WHERE o.usuarioCliente.id = u.id AND o.empresa.id = :empresaId) " +
+                        "     OR EXISTS (SELECT 1 FROM Cita ci WHERE ci.cliente.id = u.id AND ci.empresa.id = :empresaId)) " +
+                        "AND (CAST(:q AS text) IS NULL OR LOWER(c.nombres) LIKE LOWER(CONCAT('%', CAST(:q AS text), '%')) " +
+                        "     OR LOWER(c.apellidos) LIKE LOWER(CONCAT('%', CAST(:q AS text), '%')))")
         Page<PerfilCliente> findClientesByEmpresaId(
                         @Param("empresaId") Long empresaId,
                         @Param("q") String q,

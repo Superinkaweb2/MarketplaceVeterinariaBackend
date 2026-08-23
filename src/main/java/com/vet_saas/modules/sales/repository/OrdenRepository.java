@@ -94,4 +94,12 @@ public interface OrdenRepository extends JpaRepository<Orden, Long>, JpaSpecific
                         "ORDER BY o.createdAt DESC")
         List<Orden> findRecentByEmpresa(@Param("empresaId") Long empresaId,
                         org.springframework.data.domain.Pageable pageable);
+
+        @Query("SELECT o.usuarioCliente.id, SUM(o.total), COUNT(o), MAX(o.createdAt) " +
+                        "FROM Orden o " +
+                        "WHERE o.empresa.id = :empresaId " +
+                        "AND o.estado = 'PAGADO' " +
+                        "AND o.usuarioCliente IS NOT NULL " +
+                        "GROUP BY o.usuarioCliente.id")
+        List<Object[]> findSpendSummaryByEmpresa(@Param("empresaId") Long empresaId);
 }
