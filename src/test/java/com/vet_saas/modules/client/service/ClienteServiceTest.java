@@ -10,6 +10,8 @@ import com.vet_saas.modules.client.repository.ClienteRepository;
 import com.vet_saas.modules.company.model.Empresa;
 import com.vet_saas.modules.company.service.EmpresaLookupService;
 import com.vet_saas.modules.points.service.PointsService;
+import com.vet_saas.modules.sales.repository.OrdenRepository;
+import com.vet_saas.modules.appointment.repository.CitaRepository;
 import com.vet_saas.modules.user.model.Role;
 import com.vet_saas.modules.user.model.Usuario;
 import org.junit.jupiter.api.BeforeEach;
@@ -34,13 +36,15 @@ class ClienteServiceTest {
     @Mock private EmpresaLookupService empresaLookupService;
     @Mock private PointsService pointsService;
     @Mock private AppProperties appProperties;
+    @Mock private OrdenRepository ordenRepository;
+    @Mock private CitaRepository citaRepository;
 
     private ClienteService clienteService;
 
     @BeforeEach
     void setUp() {
         lenient().when(appProperties.getBusiness()).thenReturn(new AppProperties.Business());
-        clienteService = new ClienteService(clienteRepository, empresaLookupService, pointsService, appProperties);
+        clienteService = new ClienteService(clienteRepository, empresaLookupService, pointsService, appProperties, ordenRepository, citaRepository);
     }
 
     private Usuario buildUser(Long id) {
