@@ -31,10 +31,10 @@ public class DeliveryScheduler {
     private static final int TIMEOUT_BUSQUEDA_MIN = 2;
 
     /**
-     * Cada 30 segundos: reintenta asignar repartidor a deliveries en espera.
+     * Cada 5 minutos: reintenta asignar repartidor a deliveries en espera.
      * Si supera MAX_INTENTOS, marca como FALLIDO y notifica.
      */
-    @Scheduled(fixedDelay = 30_000)
+    @Scheduled(fixedDelay = 300_000)
     @Transactional
     public void reintentarAsignaciones() {
         Instant hace = Instant.now().minus(TIMEOUT_BUSQUEDA_MIN, ChronoUnit.MINUTES);

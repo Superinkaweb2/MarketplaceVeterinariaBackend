@@ -43,7 +43,7 @@ public class WebhookEventService {
         webhookEventRepository.markFailed(eventId, error, LocalDateTime.now().plusMinutes(nextDelayMinutes));
     }
 
-    @Scheduled(fixedDelay = 300000)
+    @Scheduled(fixedDelay = 900000)
     @Transactional
     public void retryFailedWebhooks() {
         var retryable = webhookEventRepository.findRetryableEvents(LocalDateTime.now());
