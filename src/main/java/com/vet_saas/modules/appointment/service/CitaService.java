@@ -8,7 +8,9 @@ import com.vet_saas.modules.appointment.dto.CitaResponse;
 import com.vet_saas.modules.appointment.dto.CrearCitaEmpresaRequest;
 import com.vet_saas.modules.appointment.model.AppointmentStatus;
 import com.vet_saas.modules.appointment.model.Cita;
+import com.vet_saas.modules.appointment.model.HorarioAtencion;
 import com.vet_saas.modules.appointment.repository.CitaRepository;
+import com.vet_saas.modules.appointment.repository.HorarioAtencionRepository;
 import com.vet_saas.modules.company.model.Empresa;
 import com.vet_saas.modules.company.repository.EmpresaRepository;
 import com.vet_saas.modules.pet.model.Mascota;
@@ -27,7 +29,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.UUID;
 
+import java.time.DayOfWeek;
+import java.time.LocalDate;
 import java.time.LocalTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -42,6 +47,7 @@ public class CitaService {
     private final VeterinarioRepository veterinarioRepository;
     private final UsuarioRepository usuarioRepository;
     private final PasswordEncoder passwordEncoder;
+    private final HorarioAtencionRepository horarioAtencionRepository;
 
     @Transactional
     public CitaResponse crearCita(Usuario cliente, CitaRequest request) {
@@ -64,6 +70,8 @@ public class CitaService {
         }
 
         LocalTime horaFin = request.getHoraInicio().plusMinutes(servicio.getDuracionMinutos());
+
+        validarCupoDisponible(empresa, request.getFechaProgramada(), request.getHoraInicio(), horaFin);
 
         if (veterinario != null) {
             boolean ocupado = citaRepository.existsOverlap(
@@ -139,6 +147,8 @@ public class CitaService {
         }
 
         LocalTime horaFin = request.getHoraInicio().plusMinutes(servicio.getDuracionMinutos());
+
+        validarCupoDisponible(empresa, request.getFechaProgramada(), request.getHoraInicio(), horaFin);
 
         if (veterinario != null) {
             boolean ocupado = citaRepository.existsOverlap(
@@ -222,5 +232,81 @@ public class CitaService {
                 throw new ForbiddenException("No tienes acceso a esta cita");
             }
         }
+    }
+
+    /**
+     * Valida que exista cupo segun el horario de atencion configurado por la empresa.
+     * Si la empresa aun no configuro ningun horario, no se aplica restriccion (compatibilidad).
+     */
+    private void validarCupoDisponible(Empresa empresa, LocalDate fecha, LocalTime horaInicio, LocalTime horaFin) {
+        List<HorarioAtencion> horariosEmpresa = horarioAtencionRepository.findByEmpresaIdOrderByDiaSemana(empresa.getId());
+        if (horariosEmpresa.isEmpty()) {
+            return;
+        }
+
+        DayOfWeek diaSemana = fecha.getDayOfWeek();
+        HorarioAtencion horario = horariosEmpresa.stream()
+                .filter(h -> h.getDiaSemana() == diaSemana && Boolean.TRUE.equals(h.getActivo()))
+                .findFirst()
+                .orElse(null);
+
+        if (horario == null) {
+            throw new BusinessException("La empresa no atiende ese día.");
+        }
+        if (horaInicio.isBefore(horario.getHoraInicio()) || horaFin.isAfter(horario.getHoraFin())) {
+            throw new BusinessException("El horario seleccionado está fuera del horario de atención.");
+        }
+
+        long ocupadas = citaRepository.findByEmpresaIdAndFechaProgramada(empresa.getId(), fecha).stream()
+                .filter(c -> c.getEstado() != AppointmentStatus.CANCELADA && c.getEstado() != AppointmentStatus.RECHAZADA)
+                .filter(c -> c.getHoraInicio().isBefore(horaFin) && c.getHoraFin().isAfter(horaInicio))
+                .count();
+
+        if (ocupadas >= horario.getCapacidad()) {
+            throw new BusinessException("Ya no hay cupo disponible en ese horario. Seleccione otro horario.");
+        }
+    }
+
+    @Transactional(readOnly = true)
+    public List<LocalTime> getAvailableSlots(Long empresaId, Long servicioId, LocalDate fecha) {
+        Servicio servicio = servicioRepository.findById(servicioId)
+                .orElseThrow(() -> new ResourceNotFoundException("Servicio no encontrado"));
+
+        DayOfWeek diaSemana = fecha.getDayOfWeek();
+        HorarioAtencion horario = horarioAtencionRepository.findByEmpresaIdAndDiaSemana(empresaId, diaSemana)
+                .filter(h -> Boolean.TRUE.equals(h.getActivo()))
+                .orElse(null);
+
+        if (horario == null) {
+            return List.of();
+        }
+
+        int duracion = servicio.getDuracionMinutos();
+        List<LocalTime> slots = new ArrayList<>();
+        LocalTime cursor = horario.getHoraInicio();
+        while (!cursor.plusMinutes(duracion).isAfter(horario.getHoraFin())) {
+            slots.add(cursor);
+            cursor = cursor.plusMinutes(duracion);
+        }
+
+        if (slots.isEmpty()) {
+            return List.of();
+        }
+
+        List<Cita> citasDelDia = citaRepository.findByEmpresaIdAndFechaProgramada(empresaId, fecha).stream()
+                .filter(c -> c.getEstado() != AppointmentStatus.CANCELADA && c.getEstado() != AppointmentStatus.RECHAZADA)
+                .toList();
+
+        List<LocalTime> disponibles = new ArrayList<>();
+        for (LocalTime slotInicio : slots) {
+            LocalTime slotFin = slotInicio.plusMinutes(duracion);
+            long ocupadas = citasDelDia.stream()
+                    .filter(c -> c.getHoraInicio().isBefore(slotFin) && c.getHoraFin().isAfter(slotInicio))
+                    .count();
+            if (ocupadas < horario.getCapacidad()) {
+                disponibles.add(slotInicio);
+            }
+        }
+        return disponibles;
     }
 }
