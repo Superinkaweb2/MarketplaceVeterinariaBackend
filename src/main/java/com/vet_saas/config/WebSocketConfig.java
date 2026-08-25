@@ -21,6 +21,8 @@ import org.springframework.web.socket.config.annotation.StompEndpointRegistry;
 import org.springframework.web.socket.config.annotation.WebSocketMessageBrokerConfigurer;
 
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 @Slf4j
 @Configuration
@@ -31,6 +33,15 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     private final JwtService jwtService;
     private final UsuarioRepository usuarioRepository;
     private final AppProperties appProperties;
+
+    private final Map<Long, CachedUser> userCache = new ConcurrentHashMap<>();
+    private static final long CACHE_TTL_MS = 300_000; // 5 minutos
+
+    private record CachedUser(Usuario usuario, long timestamp) {
+        boolean isExpired() {
+            return System.currentTimeMillis() - timestamp > CACHE_TTL_MS;
+        }
+    }
 
     @Value("${spring.profiles.active:}")
     private String activeProfile;
@@ -84,8 +95,18 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
                         String token = authHeader.substring(7);
                         try {
                             Long userId = jwtService.extractUserId(token);
-                            Usuario userDetails = usuarioRepository.findById(userId).orElse(null);
-                            
+
+                            CachedUser cached = userCache.get(userId);
+                            Usuario userDetails;
+                            if (cached != null && !cached.isExpired()) {
+                                userDetails = cached.usuario();
+                            } else {
+                                userDetails = usuarioRepository.findById(userId).orElse(null);
+                                if (userDetails != null) {
+                                    userCache.put(userId, new CachedUser(userDetails, System.currentTimeMillis()));
+                                }
+                            }
+
                             if (userDetails != null && jwtService.isTokenValid(token, userDetails)) {
                                 UsernamePasswordAuthenticationToken auth = new UsernamePasswordAuthenticationToken(
                                         userDetails, null, userDetails.getAuthorities());
