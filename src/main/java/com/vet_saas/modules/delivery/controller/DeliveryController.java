@@ -154,6 +154,18 @@ public class DeliveryController {
         return ResponseEntity.ok(ApiResponse.success(deliveryService.aceptarPedido(deliveryId, principal.getId()), "Pedido aceptado"));
     }
 
+    /** Repartidor rechaza un pedido que tenía asignado (vuelve al pool) */
+    @PostMapping("/{deliveryId}/rechazar")
+    @PreAuthorize("hasRole('REPARTIDOR')")
+    public ResponseEntity<ApiResponse<DeliveryResponseDTO>> rechazarPedido(
+            @PathVariable Long deliveryId,
+            @AuthenticationPrincipal Usuario principal) {
+        return ResponseEntity.ok(ApiResponse.success(
+            deliveryService.rechazarPedido(deliveryId, principal.getId()),
+            "Pedido rechazado. Vuelve al pool de disponibles.")
+        );
+    }
+
     // ---- Empresa (dashboard) ----
 
     /** Ver detalle de un delivery específico */

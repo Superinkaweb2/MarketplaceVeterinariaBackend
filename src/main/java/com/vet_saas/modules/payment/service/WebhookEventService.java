@@ -4,7 +4,6 @@ import com.vet_saas.modules.payment.model.WebhookEvent;
 import com.vet_saas.modules.payment.repository.WebhookEventRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -16,7 +15,6 @@ import java.time.LocalDateTime;
 public class WebhookEventService {
 
     private final WebhookEventRepository webhookEventRepository;
-    private final WebhookOrchestrator webhookOrchestrator;
 
     @Transactional
     public WebhookEvent saveEvent(String paymentId, String empresaId) {
@@ -41,24 +39,6 @@ public class WebhookEventService {
     public void markFailed(Long eventId, String error) {
         int nextDelayMinutes = calculateBackoff(eventId);
         webhookEventRepository.markFailed(eventId, error, LocalDateTime.now().plusMinutes(nextDelayMinutes));
-    }
-
-    @Scheduled(fixedDelay = 900000)
-    @Transactional
-    public void retryFailedWebhooks() {
-        var retryable = webhookEventRepository.findRetryableEvents(LocalDateTime.now());
-        if (retryable.isEmpty()) return;
-
-        log.info("Retrying {} failed webhook events", retryable.size());
-        for (WebhookEvent event : retryable) {
-            try {
-                webhookOrchestrator.processWebhookAsync(event.getPaymentId(), event.getEmpresaId());
-                markCompleted(event.getPaymentId());
-            } catch (Exception e) {
-                log.error("Retry failed for webhook event {}: {}", event.getId(), e.getMessage());
-                markFailed(event.getId(), e.getMessage());
-            }
-        }
     }
 
     private int calculateBackoff(Long eventId) {

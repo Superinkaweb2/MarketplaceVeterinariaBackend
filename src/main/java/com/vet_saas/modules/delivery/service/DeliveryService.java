@@ -10,6 +10,7 @@ import com.vet_saas.modules.delivery.dto.request.ConfirmarOTPDTO;
 import com.vet_saas.modules.delivery.dto.request.CrearDeliveryDTO;
 import com.vet_saas.modules.delivery.dto.response.DeliveryResponseDTO;
 import com.vet_saas.modules.delivery.dto.response.EstadoDeliveryEvent;
+import com.vet_saas.modules.delivery.event.DeliveryStatusChangedEvent;
 import com.vet_saas.modules.delivery.mapper.DeliveryMapper;
 import com.vet_saas.modules.delivery.model.*;
 import com.vet_saas.modules.delivery.repository.DeliveryEstadoRepository;
@@ -23,6 +24,7 @@ import com.vet_saas.modules.sales.model.Orden;
 import com.vet_saas.modules.user.repository.UsuarioRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -46,7 +48,6 @@ public class DeliveryService {
     private final DeliveryEstadoRepository estadoRepository;
     private final RepartidorRepository repartidorRepository;
     private final UsuarioRepository usuarioRepository;
-    private final AsignacionService asignacionService;
     private final StorageService cloudinaryService;
     private final SimpMessagingTemplate wsTemplate;
     private final PasswordEncoder passwordEncoder;
@@ -55,17 +56,19 @@ public class DeliveryService {
     private final EmailService emailService;
     private final PointsService pointsService;
     private final ClienteRepository clienteRepository;
+    private final ApplicationEventPublisher eventPublisher;
 
     private static final int OTP_EXPIRACION_HORAS = 4;
     private static final String CLOUDINARY_FOLDER_DELIVERY = "deliveries/confirmaciones";
 
+    private static final List<DeliveryStatus> ESTADOS_FINALES = List.of(
+        DeliveryStatus.ENTREGADO, DeliveryStatus.FALLIDO,
+        DeliveryStatus.CANCELADO, DeliveryStatus.INCIDENCIA
+    );
+
     // =========================================================
-    // CREAR DELIVERY (llamado desde OrdenService al crear orden)
+    // CREAR DELIVERY
     // =========================================================
-    /**
-     * Crear el delivery. Se usa REQUIRES_NEW para asegurar que el flush
-     * y el commit ocurran independientemente del listener principal.
-     */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public DeliveryResponseDTO crearDelivery(Orden orden, CrearDeliveryDTO dto) {
         if (deliveryRepository.existsByOrdenId(orden.getId())) {
@@ -73,12 +76,11 @@ public class DeliveryService {
             return null;
         }
 
-        // Calcular distancia y tiempo estimado
         double distanciaKm = calcularDistanciaHaversine(
             dto.getOrigenLat().doubleValue(), dto.getOrigenLng().doubleValue(),
             dto.getDestinoLat().doubleValue(), dto.getDestinoLng().doubleValue()
         );
-        int tiempoEstimadoMin = Math.max(10, (int) Math.ceil(distanciaKm / 0.5)); // ~30 km/h promedio en moto urbana
+        int tiempoEstimadoMin = Math.max(10, (int) Math.ceil(distanciaKm / 0.5));
 
         Delivery delivery = Delivery.builder()
             .orden(orden)
@@ -100,18 +102,10 @@ public class DeliveryService {
         registrarEstado(delivery, DeliveryStatus.BUSCANDO_REPARTIDOR, "Delivery creado por pago de orden", null);
 
         String otpPlano = generarYGuardarOTP(delivery);
+        emailService.sendDeliveryOtpEmail(orden.getId(), otpPlano);
 
-        // Enviar código OTP al cliente por email
-        try {
-            emailService.sendDeliveryOtpEmail(orden.getId(), otpPlano);
-        } catch (Exception e) {
-            log.warn("No se pudo enviar OTP al cliente de la orden {}: {}", orden.getCodigoOrden(), e.getMessage());
-        }
-
-        // Notificar al pool de repartidores
         wsTemplate.convertAndSend("/topic/pedidos-disponibles", deliveryMapper.toResponseDTO(delivery));
 
-        // Retornar con OTP incluido (solo esta vez)
         return deliveryMapper.toResponseDTOConOTP(delivery, otpPlano);
     }
 
@@ -123,6 +117,9 @@ public class DeliveryService {
             .collect(Collectors.toList());
     }
 
+    // =========================================================
+    // PUNTO 1: ACEPTAR PEDIDO - PESSIMISTIC_WRITE
+    // =========================================================
     public DeliveryResponseDTO aceptarPedido(Long deliveryId, Long usuarioId) {
         Delivery delivery = deliveryRepository.findById(deliveryId)
             .orElseThrow(() -> new ResourceNotFoundException("Delivery no encontrado"));
@@ -134,27 +131,39 @@ public class DeliveryService {
         Repartidor repartidor = repartidorRepository.findByUsuarioId(usuarioId)
             .orElseThrow(() -> new ResourceNotFoundException("No eres un repartidor registrado"));
 
-        // Verificar que no tenga otro delivery activo
-        boolean tieneActivo = deliveryRepository.existsByRepartidorIdAndEstadoNotIn(
-            repartidor.getIdRepartidor(), 
-            List.of(DeliveryStatus.ENTREGADO, DeliveryStatus.FALLIDO, DeliveryStatus.CANCELADO, DeliveryStatus.INCIDENCIA)
+        Repartidor repartidorLockeado = repartidorRepository.findByIdForUpdate(repartidor.getIdRepartidor())
+            .orElseThrow(() -> new ResourceNotFoundException("Repartidor no encontrado para bloqueo"));
+
+        int activos = deliveryRepository.countDeliveriesActivos(
+            repartidorLockeado.getIdRepartidor(), ESTADOS_FINALES
         );
-        if (tieneActivo) {
-            throw new BusinessException("Ya tienes un delivery en curso. Termínalo antes de tomar otro.");
+        if (activos >= repartidorLockeado.getMaxPedidosSimultaneos()) {
+            throw new BusinessException(
+                "Has alcanzado el límite de " + repartidorLockeado.getMaxPedidosSimultaneos() +
+                " pedidos simultáneos. Termínalo antes de tomar otro.");
         }
 
-        delivery.setRepartidor(repartidor);
+        delivery.setRepartidor(repartidorLockeado);
         delivery.setEstado(DeliveryStatus.REPARTIDOR_ASIGNADO);
         delivery.setAsignadoAt(Instant.now());
         deliveryRepository.save(delivery);
 
-        repartidor.setEstadoActual(RepartidorStatus.OCUPADO);
-        repartidorRepository.save(repartidor);
+        int nuevosActivos = activos + 1;
+        if (nuevosActivos >= repartidorLockeado.getMaxPedidosSimultaneos()) {
+            repartidorLockeado.setEstadoActual(RepartidorStatus.OCUPADO);
+            repartidorRepository.save(repartidorLockeado);
+        }
 
         registrarEstado(delivery, DeliveryStatus.REPARTIDOR_ASIGNADO, "Pedido aceptado por el repartidor", usuarioId);
 
-        // Notificar al cliente y actualizar el pool
-        wsTemplate.convertAndSend("/topic/delivery/" + deliveryId + "/estado", "REPARTIDOR_ASIGNADO");
+        wsTemplate.convertAndSend("/topic/delivery/" + deliveryId + "/estado",
+            EstadoDeliveryEvent.builder()
+                .deliveryId(deliveryId)
+                .estado(DeliveryStatus.REPARTIDOR_ASIGNADO)
+                .descripcion("Pedido aceptado por el repartidor")
+                .timestamp(Instant.now())
+                .build()
+        );
         wsTemplate.convertAndSend("/topic/pedidos-pool-update", deliveryId);
 
         return deliveryMapper.toResponseDTO(delivery);
@@ -179,7 +188,46 @@ public class DeliveryService {
     }
 
     // =========================================================
-    // CAMBIAR ESTADO (repartidor lo llama desde su app)
+    // PUNTO 2: RECHAZAR PEDIDO - UPDATE atómico
+    // =========================================================
+    public DeliveryResponseDTO rechazarPedido(Long deliveryId, Long repartidorId) {
+        int filasAfectadas = deliveryRepository.liberarSiAsignadoA(deliveryId, repartidorId);
+
+        if (filasAfectadas == 0) {
+            Delivery delivery = deliveryRepository.findById(deliveryId)
+                .orElseThrow(() -> new ResourceNotFoundException("Delivery no encontrado: " + deliveryId));
+
+            if (delivery.getRepartidor() == null || !delivery.getRepartidor().getIdRepartidor().equals(repartidorId)) {
+                throw new BusinessException("No eres el repartidor asignado a este delivery");
+            }
+            if (delivery.getEstado() == DeliveryStatus.RECOGIDO ||
+                delivery.getEstado() == DeliveryStatus.EN_CAMINO ||
+                delivery.getEstado() == DeliveryStatus.CERCA) {
+                throw new BusinessException("No puedes cancelar un pedido que ya fue recogido");
+            }
+            throw new BusinessException("El pedido ya fue liberado por otra operación");
+        }
+
+        repartidorRepository.actualizarEstado(repartidorId, RepartidorStatus.DISPONIBLE);
+
+        Delivery delivery = deliveryRepository.findById(deliveryId)
+            .orElseThrow(() -> new ResourceNotFoundException("Delivery no encontrado: " + deliveryId));
+        wsTemplate.convertAndSend("/topic/pedidos-disponibles", deliveryMapper.toResponseDTO(delivery));
+
+        wsTemplate.convertAndSend("/topic/delivery/" + deliveryId + "/estado",
+            EstadoDeliveryEvent.builder()
+                .deliveryId(deliveryId)
+                .estado(DeliveryStatus.BUSCANDO_REPARTIDOR)
+                .descripcion("El repartidor canceló el pedido. Buscando nuevo repartidor.")
+                .timestamp(Instant.now())
+                .build()
+        );
+
+        return deliveryMapper.toResponseDTO(delivery);
+    }
+
+    // =========================================================
+    // CAMBIAR ESTADO
     // =========================================================
     public DeliveryResponseDTO cambiarEstado(Long deliveryId, DeliveryStatus nuevoEstado,
                                               Long usuarioId, String descripcion) {
@@ -196,17 +244,16 @@ public class DeliveryService {
             );
         }
 
+        DeliveryStatus estadoAnterior = delivery.getEstado();
         delivery.setEstado(nuevoEstado);
         marcarTimestamp(delivery, nuevoEstado);
 
-        // Si el delivery termina (entregado, fallido, cancelado), liberar repartidor
         if (nuevoEstado.esFinal() && delivery.getRepartidor() != null) {
             repartidorRepository.actualizarEstado(
                 delivery.getRepartidor().getIdRepartidor(),
                 RepartidorStatus.DISPONIBLE
             );
             if (nuevoEstado == DeliveryStatus.ENTREGADO) {
-                // Incrementar contador de entregas del repartidor
                 delivery.getRepartidor().setTotalEntregas(
                     delivery.getRepartidor().getTotalEntregas() + 1
                 );
@@ -217,7 +264,6 @@ public class DeliveryService {
         delivery = deliveryRepository.save(delivery);
         registrarEstado(delivery, nuevoEstado, descripcion, usuarioId);
 
-        // Broadcast estado via WebSocket a todos los suscritos al delivery
         wsTemplate.convertAndSend(
             "/topic/delivery/" + deliveryId + "/estado",
             EstadoDeliveryEvent.builder()
@@ -228,26 +274,22 @@ public class DeliveryService {
                 .build()
         );
 
+        publishStatusChanged(delivery, estadoAnterior, nuevoEstado, descripcion);
+
         return deliveryMapper.toResponseDTO(delivery);
     }
 
-    /**
-     * Cancelar delivery por parte del cliente.
-     * Solo es posible si no ha sido recogido por el repartidor.
-     */
     @Transactional
     public DeliveryResponseDTO cancelarDelivery(Long deliveryId, Long usuarioId) {
         Delivery delivery = deliveryRepository.findById(deliveryId)
             .orElseThrow(() -> new ResourceNotFoundException("Delivery no encontrado: " + deliveryId));
 
-        // Validar que el usuario sea el dueño de la orden
         if (!delivery.getOrden().getUsuarioCliente().getId().equals(usuarioId)) {
             throw new BusinessException("No autorizado para cancelar este delivery");
         }
 
-        // Validar estado: No se puede cancelar si ya fue recogido o está en estados finales
-        if (delivery.getEstado() == DeliveryStatus.RECOGIDO || 
-            delivery.getEstado() == DeliveryStatus.EN_CAMINO || 
+        if (delivery.getEstado() == DeliveryStatus.RECOGIDO ||
+            delivery.getEstado() == DeliveryStatus.EN_CAMINO ||
             delivery.getEstado() == DeliveryStatus.CERCA) {
             throw new BusinessException("No se puede cancelar el envío porque el pedido ya está en manos del repartidor.");
         }
@@ -256,11 +298,11 @@ public class DeliveryService {
             throw new BusinessException("El delivery ya ha finalizado.");
         }
 
+        DeliveryStatus estadoAnterior = delivery.getEstado();
         delivery.setEstado(DeliveryStatus.CANCELADO);
         deliveryRepository.save(delivery);
         registrarEstado(delivery, DeliveryStatus.CANCELADO, "Venta cancelada por el cliente", usuarioId);
 
-        // Liberar al repartidor si estaba asignado
         if (delivery.getRepartidor() != null) {
             repartidorRepository.actualizarEstado(
                 delivery.getRepartidor().getIdRepartidor(),
@@ -268,8 +310,16 @@ public class DeliveryService {
             );
         }
 
-        // Notificar cambio via WebSocket
-        wsTemplate.convertAndSend("/topic/delivery/" + deliveryId + "/estado", "CANCELADO");
+        wsTemplate.convertAndSend("/topic/delivery/" + deliveryId + "/estado",
+            EstadoDeliveryEvent.builder()
+                .deliveryId(deliveryId)
+                .estado(DeliveryStatus.CANCELADO)
+                .descripcion("Venta cancelada por el cliente")
+                .timestamp(Instant.now())
+                .build()
+        );
+
+        publishStatusChanged(delivery, estadoAnterior, DeliveryStatus.CANCELADO, "Venta cancelada por el cliente");
 
         return deliveryMapper.toResponseDTO(delivery);
     }
@@ -298,7 +348,7 @@ public class DeliveryService {
     }
 
     // =========================================================
-    // CONFIRMACION POR FOTO (usa tu CloudinaryService existente)
+    // CONFIRMACION POR FOTO
     // =========================================================
     public void confirmarEntregaFoto(Long deliveryId, MultipartFile foto, Long repartidorId) {
         Delivery delivery = deliveryRepository.findById(deliveryId)
@@ -309,7 +359,6 @@ public class DeliveryService {
             throw new BusinessException("No autorizado para confirmar este delivery");
         }
 
-        // Sube la foto usando tu CloudinaryService existente
         String fotoUrl = cloudinaryService.uploadFile(foto, CLOUDINARY_FOLDER_DELIVERY);
         delivery.setFotoEntregaUrl(fotoUrl);
         deliveryRepository.save(delivery);
@@ -318,13 +367,12 @@ public class DeliveryService {
     }
 
     // =========================================================
-    // INTENTO FALLIDO (nadie abre la puerta)
+    // INTENTO FALLIDO
     // =========================================================
     public void reportarIntentoFallido(Long deliveryId, MultipartFile foto, String motivo, Long repartidorId) {
         Delivery delivery = deliveryRepository.findById(deliveryId)
             .orElseThrow(() -> new ResourceNotFoundException("Delivery no encontrado: " + deliveryId));
 
-        // Subir foto del intento fallido como evidencia
         if (foto != null && !foto.isEmpty()) {
             String fotoUrl = cloudinaryService.uploadFile(foto, CLOUDINARY_FOLDER_DELIVERY + "/fallidos");
             delivery.setFotoEntregaUrl(fotoUrl);
@@ -336,14 +384,13 @@ public class DeliveryService {
     }
 
     // =========================================================
-    // REPORTE DE INCIDENCIA (Accidente, Robo, etc.)
+    // REPORTE DE INCIDENCIA
     // =========================================================
     @Transactional
     public void reportarIncidencia(Long deliveryId, String motivo, String descripcion, MultipartFile foto, Long usuarioId) {
         Delivery delivery = deliveryRepository.findById(deliveryId)
             .orElseThrow(() -> new ResourceNotFoundException("Delivery no encontrado: " + deliveryId));
 
-        // Resolver el perfil del repartidor a partir del ID de usuario (JWT subject)
         Repartidor repartidor = repartidorRepository.findByUsuarioId(usuarioId)
             .orElseThrow(() -> new ResourceNotFoundException("Perfil de repartidor no encontrado para usuario: " + usuarioId));
         Long repartidorId = repartidor.getIdRepartidor();
@@ -357,54 +404,56 @@ public class DeliveryService {
             throw new BusinessException("No se puede reportar incidencia en un delivery finalizado");
         }
 
-        // Subir foto de evidencia si existe
         if (foto != null && !foto.isEmpty()) {
             String fotoUrl = cloudinaryService.uploadFile(foto, CLOUDINARY_FOLDER_DELIVERY + "/incidencias");
             delivery.setFotoEntregaUrl(fotoUrl);
         }
 
         String logMsg = "Incidencia reportada: " + motivo + ". " + descripcion;
-        
-        // LÓGICA BIFURCADA
+        DeliveryStatus estadoAnterior = delivery.getEstado();
+
         if (delivery.getEstado().ordinal() < DeliveryStatus.RECOGIDO.ordinal()) {
-            // ANTES DE RECOGER: Se libera el pedido para otro repartidor
             log.info("Incidencia antes de recoger para delivery {}. Reiniciando búsqueda.", deliveryId);
-            
             delivery.setEstado(DeliveryStatus.BUSCANDO_REPARTIDOR);
             delivery.setRepartidor(null);
             deliveryRepository.save(delivery);
-            
             registrarEstado(delivery, DeliveryStatus.BUSCANDO_REPARTIDOR, logMsg, repartidorId);
-            
-            // Notificar al pool nuevamente
             wsTemplate.convertAndSend("/topic/pedidos-disponibles", deliveryMapper.toResponseDTO(delivery));
-            wsTemplate.convertAndSend("/topic/delivery/" + deliveryId + "/estado", "BUSCANDO_REPARTIDOR");
+            wsTemplate.convertAndSend("/topic/delivery/" + deliveryId + "/estado",
+                EstadoDeliveryEvent.builder()
+                    .deliveryId(deliveryId)
+                    .estado(DeliveryStatus.BUSCANDO_REPARTIDOR)
+                    .descripcion(logMsg)
+                    .timestamp(Instant.now())
+                    .build()
+            );
         } else {
-            // DESPUÉS DE RECOGER: La orden falla porque el producto ya se perdió/dañó
             log.info("Incidencia después de recoger para delivery {}. Marcando orden como FALLIDA.", deliveryId);
-            
             delivery.setEstado(DeliveryStatus.INCIDENCIA);
             delivery.getOrden().setEstado(EstadoOrden.FALLIDO);
             deliveryRepository.save(delivery);
-            
             registrarEstado(delivery, DeliveryStatus.INCIDENCIA, logMsg, repartidorId);
-            
-            wsTemplate.convertAndSend("/topic/delivery/" + deliveryId + "/estado", "INCIDENCIA");
+            wsTemplate.convertAndSend("/topic/delivery/" + deliveryId + "/estado",
+                EstadoDeliveryEvent.builder()
+                    .deliveryId(deliveryId)
+                    .estado(DeliveryStatus.INCIDENCIA)
+                    .descripcion(logMsg)
+                    .timestamp(Instant.now())
+                    .build()
+            );
         }
 
-        // En cualquier caso, liberar al repartidor actual
         repartidorRepository.actualizarEstado(repartidorId, RepartidorStatus.DISPONIBLE);
+        publishStatusChanged(delivery, estadoAnterior, delivery.getEstado(), logMsg);
     }
 
-    /**
-     * Permite a la empresa reiniciar un delivery que falló o tuvo incidencia.
-     * Pone el estado en BUSCANDO_REPARTIDOR y limpia el repartidor anterior.
-     */
+    // =========================================================
+    // REINTENTAR DELIVERY
+    // =========================================================
     @Transactional
     public DeliveryResponseDTO reintentarDelivery(Long deliveryId, Long usuarioId) {
         Delivery delivery = deliveryRepository.findById(deliveryId)
             .orElseThrow(() -> new ResourceNotFoundException("Delivery no encontrado: " + deliveryId));
-
         return reintentarInternal(delivery, usuarioId);
     }
 
@@ -412,13 +461,10 @@ public class DeliveryService {
     public DeliveryResponseDTO reintentarDeliveryByOrder(Long ordenId, Long usuarioId) {
         Delivery delivery = deliveryRepository.findByOrdenId(ordenId)
             .orElseThrow(() -> new ResourceNotFoundException("No se encontró delivery para la orden: " + ordenId));
-
         return reintentarInternal(delivery, usuarioId);
     }
 
     private DeliveryResponseDTO reintentarInternal(Delivery delivery, Long usuarioId) {
-        // Validar que el usuario sea el dueño de la empresa del origen (o admin)
-        // Por simplicidad en este MVP validamos que el delivery esté en estado final no exitoso
         if (delivery.getEstado() != DeliveryStatus.FALLIDO && delivery.getEstado() != DeliveryStatus.INCIDENCIA) {
             throw new BusinessException("Solo se pueden reintentar pedidos fallidos o con incidencia");
         }
@@ -428,21 +474,26 @@ public class DeliveryService {
         delivery.setEstado(DeliveryStatus.BUSCANDO_REPARTIDOR);
         delivery.setRepartidor(null);
         delivery.setFotoEntregaUrl(null);
-        // Regresar la orden a estado PAGADO (estaba en FALLIDO)
         delivery.getOrden().setEstado(EstadoOrden.PAGADO);
-        
+
         deliveryRepository.save(delivery);
         registrarEstado(delivery, DeliveryStatus.BUSCANDO_REPARTIDOR, "Reintento de envío solicitado", usuarioId);
 
-        // Notificar al pool
         wsTemplate.convertAndSend("/topic/pedidos-disponibles", deliveryMapper.toResponseDTO(delivery));
-        wsTemplate.convertAndSend("/topic/delivery/" + delivery.getId() + "/estado", "BUSCANDO_REPARTIDOR");
+        wsTemplate.convertAndSend("/topic/delivery/" + delivery.getId() + "/estado",
+            EstadoDeliveryEvent.builder()
+                .deliveryId(delivery.getId())
+                .estado(DeliveryStatus.BUSCANDO_REPARTIDOR)
+                .descripcion("Reintento de envío solicitado")
+                .timestamp(Instant.now())
+                .build()
+        );
 
         return deliveryMapper.toResponseDTO(delivery);
     }
 
     // =========================================================
-    // CALIFICACION DEL CLIENTE AL REPARTIDOR
+    // CALIFICACION
     // =========================================================
     public void calificarEntrega(Long deliveryId, CalificacionDTO dto, Long clienteId) {
         Delivery delivery = deliveryRepository.findById(deliveryId)
@@ -466,10 +517,8 @@ public class DeliveryService {
         delivery.setComentarioProducto(dto.getComentarioProducto());
         deliveryRepository.save(delivery);
 
-        // Recalcular promedio del repartidor
         recalcularCalificacionRepartidor(delivery.getRepartidor().getIdRepartidor());
-        
-        // Gamification (Reward client for rating)
+
         try {
             clienteRepository.findByUsuarioId(clienteId).ifPresent(perfil -> {
                  pointsService.addPoints(perfil.getId(), "CALIFICAR_DELIVERY", delivery.getId(), "Gracias por calificar tu entrega");
@@ -483,7 +532,6 @@ public class DeliveryService {
     public List<DeliveryResponseDTO> getRatingsByUsuarioEmpresa(Long usuarioId) {
         Empresa empresa = empresaRepository.findByUsuarioPropietarioId(usuarioId)
             .orElseThrow(() -> new BusinessException("No se encontró una empresa vinculada a este usuario"));
-            
         return deliveryRepository.findRatingsByEmpresa(empresa.getId())
             .stream()
             .map(deliveryMapper::toResponseDTO)
@@ -493,12 +541,30 @@ public class DeliveryService {
     // =========================================================
     // HELPERS PRIVADOS
     // =========================================================
+    private void publishStatusChanged(Delivery delivery, DeliveryStatus estadoAnterior,
+                                       DeliveryStatus estadoNuevo, String descripcion) {
+        String nombreRepartidor = null;
+        if (delivery.getRepartidor() != null) {
+            nombreRepartidor = delivery.getRepartidor().getNombres() + " " +
+                              delivery.getRepartidor().getApellidos();
+        }
+        String emailCliente = null;
+        if (delivery.getOrden() != null && delivery.getOrden().getUsuarioCliente() != null) {
+            emailCliente = delivery.getOrden().getUsuarioCliente().getCorreo();
+        }
+        eventPublisher.publishEvent(new DeliveryStatusChangedEvent(
+            this, delivery.getId(),
+            delivery.getOrden() != null ? delivery.getOrden().getId() : null,
+            estadoAnterior, estadoNuevo, descripcion, nombreRepartidor, emailCliente
+        ));
+    }
+
     private String generarYGuardarOTP(Delivery delivery) {
         String codigo = String.format("%04d", new SecureRandom().nextInt(10000));
         delivery.setCodigoConfirmacion(passwordEncoder.encode(codigo));
         delivery.setCodigoExpiraAt(Instant.now().plus(OTP_EXPIRACION_HORAS, ChronoUnit.HOURS));
         deliveryRepository.save(delivery);
-        return codigo; // solo se retorna aquí, nunca más
+        return codigo;
     }
 
     private void marcarTimestamp(Delivery delivery, DeliveryStatus estado) {
@@ -522,26 +588,20 @@ public class DeliveryService {
     }
 
     private void recalcularCalificacionRepartidor(Long repartidorId) {
-        // Promedio simple de todas las calificaciones recibidas
         Double promedio = deliveryRepository
-            .findByRepartidorIdRepartidorOrderByCreatedAtDesc(repartidorId)
+            .findCalificacionesByRepartidor(repartidorId)
             .stream()
-            .filter(d -> d.getCalificacionRepartidor() != null)
             .mapToInt(d -> d.getCalificacionRepartidor().intValue())
             .average()
             .orElse(5.0);
-
         repartidorRepository.findById(repartidorId).ifPresent(r -> {
             r.setCalificacionPromedio(new java.math.BigDecimal(String.format("%.2f", promedio)));
             repartidorRepository.save(r);
         });
     }
 
-    /**
-     * Calcula la distancia en kilómetros entre dos puntos usando la fórmula de Haversine.
-     */
     private double calcularDistanciaHaversine(double lat1, double lng1, double lat2, double lng2) {
-        final double R = 6371.0; // Radio de la Tierra en km
+        final double R = 6371.0;
         double dLat = Math.toRadians(lat2 - lat1);
         double dLng = Math.toRadians(lng2 - lng1);
         double a = Math.sin(dLat / 2) * Math.sin(dLat / 2)

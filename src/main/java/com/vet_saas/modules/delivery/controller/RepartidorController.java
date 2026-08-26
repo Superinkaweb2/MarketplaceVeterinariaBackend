@@ -103,13 +103,13 @@ public class RepartidorController {
         return ResponseEntity.ok(ApiResponse.success(null, "Ubicación actualizada"));
     }
 
-    /** Delivery activo actual del repartidor */
-    @GetMapping("/me/delivery-activo")
+    /** Deliveries activos del repartidor (hasta maxPedidosSimultaneos) */
+    @GetMapping("/me/deliveries-activos")
     @PreAuthorize("hasRole('REPARTIDOR')")
-    public ResponseEntity<ApiResponse<DeliveryResponseDTO>> getDeliveryActivo(
+    public ResponseEntity<ApiResponse<List<DeliveryResponseDTO>>> getDeliveriesActivos(
             @AuthenticationPrincipal Usuario principal) {
-        DeliveryResponseDTO activo = repartidorService.getDeliveryActivo(principal.getId());
-        return ResponseEntity.ok(ApiResponse.success(activo, "Delivery activo recuperado"));
+        List<DeliveryResponseDTO> activos = repartidorService.getDeliveriesActivos(principal.getId());
+        return ResponseEntity.ok(ApiResponse.success(activos, "Deliveries activos recuperados"));
     }
 
     /** Historial de entregas del repartidor */

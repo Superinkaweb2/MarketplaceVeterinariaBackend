@@ -81,6 +81,10 @@ public class Repartidor {
     @Builder.Default
     private Integer totalEntregas = 0;
 
+    @Column(name = "max_pedidos_simultaneos", nullable = false)
+    @Builder.Default
+    private Integer maxPedidosSimultaneos = 3;
+
     @Builder.Default
     private Boolean activo = true;
 
