@@ -106,26 +106,27 @@ public class RepartidorService {
         );
     }
 
-    /** Delivery activo del repartidor (si tiene uno en curso) */
+    /** Deliveries activos del repartidor (hasta maxPedidosSimultaneos en curso) */
     @Transactional(readOnly = true)
-    public DeliveryResponseDTO getDeliveryActivo(Long usuarioId) {
+    public List<DeliveryResponseDTO> getDeliveriesActivos(Long usuarioId) {
         Repartidor repartidor = repartidorRepository.findByUsuarioId(usuarioId)
             .orElseThrow(() -> new ResourceNotFoundException("Repartidor no encontrado"));
 
         return deliveryRepository.findByRepartidorIdRepartidorAndEstadoNotIn(
             repartidor.getIdRepartidor(),
             List.of(DeliveryStatus.ENTREGADO, DeliveryStatus.CANCELADO, DeliveryStatus.FALLIDO, DeliveryStatus.INCIDENCIA)
-        ).map(deliveryMapper::toResponseDTO).orElse(null);
+        ).stream().map(deliveryMapper::toResponseDTO).toList();
     }
 
-    /** Historial de entregas del repartidor */
+    /** Historial de entregas completadas del repartidor */
     @Transactional(readOnly = true)
     public List<DeliveryResponseDTO> getHistorial(Long usuarioId) {
         Repartidor repartidor = repartidorRepository.findByUsuarioId(usuarioId)
             .orElseThrow(() -> new ResourceNotFoundException("Repartidor no encontrado"));
 
         return deliveryRepository
-            .findByRepartidorIdRepartidorOrderByCreatedAtDesc(repartidor.getIdRepartidor())
+            .findByRepartidorIdRepartidorAndEstadoOrderByCreatedAtDesc(
+                repartidor.getIdRepartidor(), DeliveryStatus.ENTREGADO)
             .stream()
             .map(deliveryMapper::toResponseDTO)
             .toList();

@@ -273,4 +273,116 @@ public class EmailService {
             LOGGER.error("Error sending newsletter admin notification for {}: {}", subscriberEmail, ex.getMessage(), ex);
         }
     }
+
+    @Async("mailExecutor")
+    @Transactional(readOnly = true)
+    public void sendDeliveryAsignadoEmail(Long ordenId, String nombreRepartidor) {
+        try {
+            Orden orden = ordenRepository.findByIdForEmail(ordenId)
+                    .orElseThrow(() -> new IllegalStateException("Order not found for email: " + ordenId));
+            String emailDestino = orden.getUsuarioCliente().getCorreo();
+            if (emailDestino == null || emailDestino.isBlank()) return;
+
+            String htmlContent = "<div style='font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px'>"
+                + "<h2 style='color:#1ea59c'>Tu pedido tiene repartidor asignado</h2>"
+                + "<p>Hola <strong>" + emailDestino + "</strong>,</p>"
+                + "<p>Tu pedido <strong>" + orden.getCodigoOrden() + "</strong> fue asignado a <strong>" + nombreRepartidor + "</strong>.</p>"
+                + "<p>El repartidor pasará a recoger tu pedido y te lo entregará pronto.</p>"
+                + "<hr style='border:0;border-top:1px solid #eee;margin-top:30px'>"
+                + "<p style='font-size:11px;color:#999'>Notificación automática de Huella360.</p></div>";
+            sendEmail(emailDestino, "Tu pedido fue asignado - " + orden.getCodigoOrden(), htmlContent);
+        } catch (Exception ex) {
+            LOGGER.error("Error sending delivery asignado email orderId={}: {}", ordenId, ex.getMessage(), ex);
+        }
+    }
+
+    @Async("mailExecutor")
+    @Transactional(readOnly = true)
+    public void sendDeliveryEnCaminoEmail(Long ordenId) {
+        try {
+            Orden orden = ordenRepository.findByIdForEmail(ordenId)
+                    .orElseThrow(() -> new IllegalStateException("Order not found for email: " + ordenId));
+            String emailDestino = orden.getUsuarioCliente().getCorreo();
+            if (emailDestino == null || emailDestino.isBlank()) return;
+
+            String htmlContent = "<div style='font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px'>"
+                + "<h2 style='color:#1ea59c'>Tu pedido va en camino</h2>"
+                + "<p>Hola <strong>" + emailDestino + "</strong>,</p>"
+                + "<p>Tu pedido <strong>" + orden.getCodigoOrden() + "</strong> ya va camino a tu dirección.</p>"
+                + "<p>Puedes seguir el estado en tiempo real desde la plataforma.</p>"
+                + "<hr style='border:0;border-top:1px solid #eee;margin-top:30px'>"
+                + "<p style='font-size:11px;color:#999'>Notificación automática de Huella360.</p></div>";
+            sendEmail(emailDestino, "Tu pedido va en camino - " + orden.getCodigoOrden(), htmlContent);
+        } catch (Exception ex) {
+            LOGGER.error("Error sending delivery en camino email orderId={}: {}", ordenId, ex.getMessage(), ex);
+        }
+    }
+
+    @Async("mailExecutor")
+    @Transactional(readOnly = true)
+    public void sendDeliveryEntregadoEmail(Long ordenId) {
+        try {
+            Orden orden = ordenRepository.findByIdForEmail(ordenId)
+                    .orElseThrow(() -> new IllegalStateException("Order not found for email: " + ordenId));
+            String emailDestino = orden.getUsuarioCliente().getCorreo();
+            if (emailDestino == null || emailDestino.isBlank()) return;
+
+            String htmlContent = "<div style='font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px'>"
+                + "<h2 style='color:#1ea59c'>Tu pedido fue entregado</h2>"
+                + "<p>Hola <strong>" + emailDestino + "</strong>,</p>"
+                + "<p>Tu pedido <strong>" + orden.getCodigoOrden() + "</strong> fue entregado exitosamente.</p>"
+                + "<p>Te invitamos a calificar tu experiencia de compra.</p>"
+                + "<hr style='border:0;border-top:1px solid #eee;margin-top:30px'>"
+                + "<p style='font-size:11px;color:#999'>Notificación automática de Huella360.</p></div>";
+            sendEmail(emailDestino, "Pedido entregado - " + orden.getCodigoOrden(), htmlContent);
+        } catch (Exception ex) {
+            LOGGER.error("Error sending delivery entregado email orderId={}: {}", ordenId, ex.getMessage(), ex);
+        }
+    }
+
+    @Async("mailExecutor")
+    @Transactional(readOnly = true)
+    public void sendDeliveryFallidoEmail(Long ordenId, String motivo) {
+        try {
+            Orden orden = ordenRepository.findByIdForEmail(ordenId)
+                    .orElseThrow(() -> new IllegalStateException("Order not found for email: " + ordenId));
+            String emailDestino = orden.getUsuarioCliente().getCorreo();
+            if (emailDestino == null || emailDestino.isBlank()) return;
+
+            String htmlContent = "<div style='font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px'>"
+                + "<h2 style='color:#e74c3c'>Problema con tu entrega</h2>"
+                + "<p>Hola <strong>" + emailDestino + "</strong>,</p>"
+                + "<p>Lamentablemente hubo un problema con la entrega de tu pedido <strong>" + orden.getCodigoOrden() + "</strong>.</p>"
+                + (motivo != null ? "<p><strong>Motivo:</strong> " + motivo + "</p>" : "")
+                + "<p>El equipo de la tienda está trabajando para resolverlo.</p>"
+                + "<hr style='border:0;border-top:1px solid #eee;margin-top:30px'>"
+                + "<p style='font-size:11px;color:#999'>Notificación automática de Huella360.</p></div>";
+            sendEmail(emailDestino, "Problema con tu entrega - " + orden.getCodigoOrden(), htmlContent);
+        } catch (Exception ex) {
+            LOGGER.error("Error sending delivery fallido email orderId={}: {}", ordenId, ex.getMessage(), ex);
+        }
+    }
+
+    @Async("mailExecutor")
+    @Transactional(readOnly = true)
+    public void sendDeliveryCanceladoEmail(Long ordenId, String motivo) {
+        try {
+            Orden orden = ordenRepository.findByIdForEmail(ordenId)
+                    .orElseThrow(() -> new IllegalStateException("Order not found for email: " + ordenId));
+            String emailDestino = orden.getUsuarioCliente().getCorreo();
+            if (emailDestino == null || emailDestino.isBlank()) return;
+
+            String htmlContent = "<div style='font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px'>"
+                + "<h2 style='color:#e67e22'>Tu entrega fue cancelada</h2>"
+                + "<p>Hola <strong>" + emailDestino + "</strong>,</p>"
+                + "<p>Tu pedido <strong>" + orden.getCodigoOrden() + "</strong> fue cancelado.</p>"
+                + (motivo != null ? "<p><strong>Motivo:</strong> " + motivo + "</p>" : "")
+                + "<p>Si tienes dudas, contacta a la tienda.</p>"
+                + "<hr style='border:0;border-top:1px solid #eee;margin-top:30px'>"
+                + "<p style='font-size:11px;color:#999'>Notificación automática de Huella360.</p></div>";
+            sendEmail(emailDestino, "Tu entrega fue cancelada - " + orden.getCodigoOrden(), htmlContent);
+        } catch (Exception ex) {
+            LOGGER.error("Error sending delivery cancelado email orderId={}: {}", ordenId, ex.getMessage(), ex);
+        }
+    }
 }
