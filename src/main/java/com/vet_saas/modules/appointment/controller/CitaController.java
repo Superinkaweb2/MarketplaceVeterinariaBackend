@@ -15,11 +15,14 @@ import com.vet_saas.modules.veterinarian.model.Veterinario;
 import com.vet_saas.modules.veterinarian.repository.VeterinarioRepository;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDate;
+import java.time.LocalTime;
 import java.util.List;
 
 @RestController
@@ -30,6 +33,16 @@ public class CitaController {
     private final CitaService citaService;
     private final EmpresaRepository empresaRepository;
     private final VeterinarioRepository veterinarioRepository;
+
+    @GetMapping("/available-slots")
+    public ResponseEntity<ApiResponse<List<LocalTime>>> getAvailableSlots(
+            @RequestParam Long empresaId,
+            @RequestParam Long servicioId,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fecha) {
+        return ResponseEntity.ok(ApiResponse.success(
+                citaService.getAvailableSlots(empresaId, servicioId, fecha),
+                "Horarios disponibles recuperados"));
+    }
 
     @PostMapping
     @PreAuthorize("hasRole('CLIENTE')")

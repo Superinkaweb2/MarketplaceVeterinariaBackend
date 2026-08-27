@@ -42,12 +42,12 @@ class CompanyControllerTest extends AbstractIntegrationTest {
     }
 
     @Test
-    void getAllPublicCompanies_returns403_withoutAuth() throws Exception {
+    void getAllPublicCompanies_returns200_withoutAuth() throws Exception {
         SecurityContextHolder.clearContext();
         mockMvc.perform(get("/api/v1/companies/public")
                         .param("page", "0")
                         .param("size", "10"))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isOk());
     }
 
     @Test

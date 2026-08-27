@@ -1,6 +1,7 @@
 package com.vet_saas.modules.client.controller;
 
 import com.vet_saas.core.response.ApiResponse;
+import com.vet_saas.modules.client.dto.ClienteCrmResponse;
 import com.vet_saas.modules.client.dto.ClienteResponse;
 import com.vet_saas.modules.client.dto.CreateClienteDto;
 import com.vet_saas.modules.client.dto.UpdateClienteDto;
@@ -128,6 +129,28 @@ public class ClienteController {
 
         Page<ClienteResponse> result = clienteService.getClientesByEmpresa(usuario, q, pageable);
         return ResponseEntity.ok(ApiResponse.success(result, "Clientes de la empresa"));
+    }
+
+    /**
+     * GET /api/v1/clients/empresa/crm
+     * Listar clientes de la empresa autenticada con estadisticas de CRM
+     * (total gastado, total pedidos, total citas, ultima compra).
+     * Requiere rol EMPRESA.
+     */
+    @GetMapping("/empresa/crm")
+    @PreAuthorize("hasRole('EMPRESA')")
+    public ResponseEntity<ApiResponse<Page<ClienteCrmResponse>>> getClientesCrmByEmpresa(
+            @AuthenticationPrincipal Usuario usuario,
+            @RequestParam(required = false) String q,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(defaultValue = "desc") String sort) {
+
+        Sort.Direction direction = sort.equalsIgnoreCase("asc") ? Sort.Direction.ASC : Sort.Direction.DESC;
+        Pageable pageable = PageRequest.of(page, Math.min(size, 100), Sort.by(direction, "updatedAt"));
+
+        Page<ClienteCrmResponse> result = clienteService.getClientesCrmByEmpresa(usuario, q, pageable);
+        return ResponseEntity.ok(ApiResponse.success(result, "Clientes de la empresa con estadisticas CRM"));
     }
 
     /**
