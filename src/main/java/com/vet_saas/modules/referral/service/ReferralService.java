@@ -12,6 +12,8 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.concurrent.ThreadLocalRandom;
+
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -21,14 +23,29 @@ public class ReferralService {
     private final UsuarioRepository usuarioRepository;
 
     private static final long REFERIDOS_PARA_DESBLOQUEO = 10;
+    private static final int CODIGO_LONGITUD = 8;
+    private static final String CODIGO_PREFIJO = "H360-";
+    private static final String CODIGO_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
 
     /**
-     * Genera un código de referido único para el usuario.
-     * El código se deriva del ID del usuario y es determinista.
-     * No crea registros en la tabla referidos hasta que alguien use el código.
+     * Obtiene (o genera) el código de referido único del usuario.
+     * El código se persiste en la tabla usuarios y no cambia.
      */
-    public String generateReferralCode(Usuario usuario) {
-        return "H360-" + usuario.getId();
+    @Transactional
+    public String getOrGenerateReferralCode(Usuario usuario) {
+        if (usuario.getCodigoReferral() != null) {
+            return usuario.getCodigoReferral();
+        }
+
+        String nuevoCodigo;
+        do {
+            nuevoCodigo = CODIGO_PREFIJO + generarCodigoAleatorio(CODIGO_LONGITUD);
+        } while (usuarioRepository.findByCodigoReferral(nuevoCodigo).isPresent());
+
+        usuario.setCodigoReferral(nuevoCodigo);
+        usuarioRepository.save(usuario);
+        log.info("Código de referido generado para usuario {}: {}", usuario.getId(), nuevoCodigo);
+        return nuevoCodigo;
     }
 
     /**
@@ -41,46 +58,24 @@ public class ReferralService {
             throw new BusinessException("El código de referido es obligatorio");
         }
 
-        // Validar formato del código
-        if (!codigo.startsWith("H360-")) {
-            throw new BusinessException("Código de referido inválido");
-        }
+        Usuario referrer = usuarioRepository.findByCodigoReferral(codigo)
+                .orElseThrow(() -> new BusinessException("Código de referido inválido"));
 
-        // Extraer el ID del usuario que refiere del código
-        Long referrerId;
-        try {
-            referrerId = Long.parseLong(codigo.substring(5));
-        } catch (NumberFormatException e) {
-            throw new BusinessException("Código de referido inválido");
-        }
-
-        // No permitir auto-referencia
-        if (referrerId.equals(nuevoUsuario.getId())) {
+        if (referrer.getId().equals(nuevoUsuario.getId())) {
             throw new BusinessException("No puedes usar tu propio código de referido");
         }
 
-        // Validar que el usuario que refiere exista en la BD
-        if (!usuarioRepository.findById(referrerId).isPresent()) {
-            throw new BusinessException("El código de referido no corresponde a un usuario válido");
-        }
-
-        // Verificar si ya fue referido por alguien (excluyendo auto-referencias)
         boolean alreadyReferred = referidoRepository.existsByUsuarioRefiridoIdAndNotSelfReference(
                 nuevoUsuario.getId(), nuevoUsuario.getId());
         if (alreadyReferred) {
             throw new BusinessException("Ya has sido referido por otro usuario");
         }
 
-        // Verificar si ya aplicó este mismo código
         boolean alreadyApplied = referidoRepository
-                .existsByUsuarioRefiridoIdAndUsuarioQueRefirioId(nuevoUsuario.getId(), referrerId);
+                .existsByUsuarioRefiridoIdAndUsuarioQueRefirioId(nuevoUsuario.getId(), referrer.getId());
         if (alreadyApplied) {
             throw new BusinessException("Ya has aplicado este código de referido");
         }
-
-        // Buscar el usuario que refiere (managed entity para evitar FK violation)
-        Usuario referrer = usuarioRepository.findById(referrerId)
-                .orElseThrow(() -> new BusinessException("El código de referido no corresponde a un usuario válido"));
 
         Referido newReferido = Referido.builder()
                 .usuarioQueRefirio(referrer)
@@ -90,14 +85,14 @@ public class ReferralService {
 
         try {
             referidoRepository.save(newReferido);
-            log.info("Usuario {} referido por usuario {}", nuevoUsuario.getId(), referrerId);
+            log.info("Usuario {} referido por usuario {}", nuevoUsuario.getId(), referrer.getId());
         } catch (DataIntegrityViolationException e) {
-            throw new BusinessException("Este código de referido ya ha sido utilizado por otro usuario");
+            throw new BusinessException("Este código de referido ya ha sido utilizado");
         }
     }
 
     /**
-     * Cuenta cuántos usuarios ha referido uno dado (excluyendo auto-referencias).
+     * Cuenta cuántos usuarios ha referido uno dado.
      */
     @Transactional(readOnly = true)
     public ReferralCountResponse getReferralCount(Long usuarioId) {
@@ -115,5 +110,14 @@ public class ReferralService {
     @Transactional(readOnly = true)
     public ReferralCountResponse getReferralCount(Usuario usuario) {
         return getReferralCount(usuario.getId());
+    }
+
+    private String generarCodigoAleatorio(int longitud) {
+        ThreadLocalRandom random = ThreadLocalRandom.current();
+        StringBuilder sb = new StringBuilder(longitud);
+        for (int i = 0; i < longitud; i++) {
+            sb.append(CODIGO_CHARS.charAt(random.nextInt(CODIGO_CHARS.length())));
+        }
+        return sb.toString();
     }
 }
