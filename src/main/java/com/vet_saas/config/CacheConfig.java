@@ -33,6 +33,10 @@ public class CacheConfig {
                 .withCacheConfiguration("productosById", RedisCacheConfiguration.defaultCacheConfig().entryTtl(Duration.ofMinutes(15)))
                 .withCacheConfiguration("empresasById", RedisCacheConfiguration.defaultCacheConfig().entryTtl(Duration.ofMinutes(15)))
                 .withCacheConfiguration("empresasByUsername", RedisCacheConfiguration.defaultCacheConfig().entryTtl(Duration.ofMinutes(15)))
+                .withCacheConfiguration("empresasByPropietario", RedisCacheConfiguration.defaultCacheConfig().entryTtl(Duration.ofMinutes(10)))
+                .withCacheConfiguration("dashboardMetrics", RedisCacheConfiguration.defaultCacheConfig().entryTtl(Duration.ofMinutes(3)))
+                .withCacheConfiguration("dashboardChart", RedisCacheConfiguration.defaultCacheConfig().entryTtl(Duration.ofMinutes(5)))
+                .withCacheConfiguration("dashboardActivity", RedisCacheConfiguration.defaultCacheConfig().entryTtl(Duration.ofMinutes(2)))
                 .build();
     }
 }

@@ -4,6 +4,7 @@ import com.vet_saas.config.AppProperties;
 import com.vet_saas.core.exceptions.types.BusinessException;
 import com.vet_saas.core.exceptions.types.ForbiddenException;
 import com.vet_saas.core.exceptions.types.ResourceNotFoundException;
+import com.vet_saas.modules.appointment.repository.CitaRepository;
 import com.vet_saas.modules.client.dto.ClienteCrmResponse;
 import com.vet_saas.modules.client.dto.ClienteResponse;
 import com.vet_saas.modules.client.dto.CreateClienteDto;
@@ -12,23 +13,20 @@ import com.vet_saas.modules.client.model.PerfilCliente;
 import com.vet_saas.modules.client.repository.ClienteRepository;
 import com.vet_saas.modules.company.model.Empresa;
 import com.vet_saas.modules.company.service.EmpresaLookupService;
-import com.vet_saas.modules.appointment.repository.CitaRepository;
+import com.vet_saas.modules.points.service.PointsService;
 import com.vet_saas.modules.sales.repository.OrdenRepository;
 import com.vet_saas.modules.user.model.Usuario;
-import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
-
-import com.vet_saas.modules.points.service.PointsService;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Slf4j
 @Service

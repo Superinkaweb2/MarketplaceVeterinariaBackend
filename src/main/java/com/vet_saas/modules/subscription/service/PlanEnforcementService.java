@@ -1,6 +1,7 @@
 package com.vet_saas.modules.subscription.service;
 
 import com.vet_saas.core.exceptions.types.BusinessException;
+import com.vet_saas.modules.referral.service.ReferralService;
 import com.vet_saas.modules.subscription.model.Plan;
 import com.vet_saas.modules.subscription.model.Suscripcion;
 import lombok.RequiredArgsConstructor;
@@ -12,6 +13,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class PlanEnforcementService {
 
     private final SubscriptionService subscriptionService;
+    private final ReferralService referralService;
 
     @Transactional(readOnly = true)
     public void enforceMascotaLimit(Long usuarioId, long currentCount, String role) {
@@ -32,10 +34,22 @@ public class PlanEnforcementService {
                     "Tu plan " + sub.getPlan().getNombre() + " no incluye mascotas. "
                             + "Mejora tu suscripción para agregar mascotas.");
         }
-        if (currentCount >= limit) {
+
+        // Bonus: +1 mascota extra si tiene >= 10 referidos
+        long effectiveLimit = limit;
+        try {
+            if (referralService.getReferralCount(usuarioId).isDesbloqueo2daMascota()) {
+                effectiveLimit = limit + 1;
+            }
+        } catch (Exception e) {
+            // Si falla la consulta de referidos, usar el límite base del plan
+        }
+
+        if (currentCount >= effectiveLimit) {
+            String extraMsg = effectiveLimit > limit ? " (+1 por referidos)" : "";
             throw new BusinessException(
-                    "Has alcanzado el límite de " + limit + " mascota(s) de tu plan " +
-                            sub.getPlan().getNombre() + ". Mejora tu suscripción para agregar más.");
+                    "Has alcanzado el límite de " + effectiveLimit + " mascota(s) de tu plan " +
+                            sub.getPlan().getNombre() + extraMsg + ". Mejora tu suscripción para agregar más.");
         }
     }
 

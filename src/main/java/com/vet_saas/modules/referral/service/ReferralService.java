@@ -5,8 +5,10 @@ import com.vet_saas.modules.referral.dto.ReferralCountResponse;
 import com.vet_saas.modules.referral.model.Referido;
 import com.vet_saas.modules.referral.repository.ReferidoRepository;
 import com.vet_saas.modules.user.model.Usuario;
+import com.vet_saas.modules.user.repository.UsuarioRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -16,6 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class ReferralService {
 
     private final ReferidoRepository referidoRepository;
+    private final UsuarioRepository usuarioRepository;
 
     private static final long REFERIDOS_PARA_DESBLOQUEO = 10;
 
@@ -35,7 +38,7 @@ public class ReferralService {
     @Transactional
     public void applyReferralCode(Usuario nuevoUsuario, String codigo) {
         if (codigo == null || codigo.isBlank()) {
-            return;
+            throw new BusinessException("El código de referido es obligatorio");
         }
 
         // Validar formato del código
@@ -56,6 +59,11 @@ public class ReferralService {
             throw new BusinessException("No puedes usar tu propio código de referido");
         }
 
+        // Validar que el usuario que refiere exista en la BD
+        if (!usuarioRepository.findById(referrerId).isPresent()) {
+            throw new BusinessException("El código de referido no corresponde a un usuario válido");
+        }
+
         // Verificar si ya fue referido por alguien (excluyendo auto-referencias)
         boolean alreadyReferred = referidoRepository.existsByUsuarioRefiridoIdAndNotSelfReference(
                 nuevoUsuario.getId(), nuevoUsuario.getId());
@@ -70,9 +78,9 @@ public class ReferralService {
             throw new BusinessException("Ya has aplicado este código de referido");
         }
 
-        // Buscar el usuario que refiere
-        Usuario referrer = new Usuario();
-        referrer.setId(referrerId);
+        // Buscar el usuario que refiere (managed entity para evitar FK violation)
+        Usuario referrer = usuarioRepository.findById(referrerId)
+                .orElseThrow(() -> new BusinessException("El código de referido no corresponde a un usuario válido"));
 
         Referido newReferido = Referido.builder()
                 .usuarioQueRefirio(referrer)
@@ -80,16 +88,20 @@ public class ReferralService {
                 .codigoReferido(codigo)
                 .build();
 
-        referidoRepository.save(newReferido);
-        log.info("Usuario {} referido por usuario {}", nuevoUsuario.getId(), referrerId);
+        try {
+            referidoRepository.save(newReferido);
+            log.info("Usuario {} referido por usuario {}", nuevoUsuario.getId(), referrerId);
+        } catch (DataIntegrityViolationException e) {
+            throw new BusinessException("Este código de referido ya ha sido utilizado por otro usuario");
+        }
     }
 
     /**
      * Cuenta cuántos usuarios ha referido uno dado (excluyendo auto-referencias).
      */
     @Transactional(readOnly = true)
-    public ReferralCountResponse getReferralCount(Usuario usuario) {
-        long count = referidoRepository.countByUsuarioQueRefirioId(usuario.getId());
+    public ReferralCountResponse getReferralCount(Long usuarioId) {
+        long count = referidoRepository.countByUsuarioQueRefirioId(usuarioId);
         boolean desbloqueado = count >= REFERIDOS_PARA_DESBLOQUEO;
 
         return ReferralCountResponse.builder()
@@ -98,5 +110,10 @@ public class ReferralService {
                 .referidosNecesarios(REFERIDOS_PARA_DESBLOQUEO)
                 .referidosRestantes(Math.max(0, REFERIDOS_PARA_DESBLOQUEO - count))
                 .build();
+    }
+
+    @Transactional(readOnly = true)
+    public ReferralCountResponse getReferralCount(Usuario usuario) {
+        return getReferralCount(usuario.getId());
     }
 }

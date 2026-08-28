@@ -14,14 +14,14 @@ public interface ReferidoRepository extends JpaRepository<Referido, Long> {
 
     long countByUsuarioQueRefirioId(Long usuarioId);
 
-    Optional<Referido> findByCodigoReferido(String codigo);
+    List<Referido> findByCodigoReferido(String codigo);
 
     Optional<Referido> findByUsuarioRefiridoId(Long usuarioId);
 
     List<Referido> findByUsuarioQueRefirioIdOrderByCreatedAtDesc(Long usuarioId);
 
-    @Query("SELECT CASE WHEN COUNT(r) > 0 THEN true ELSE false END FROM Referido r WHERE r.usuarioRefirido.id = :userId AND r.usuarioQueRefirio.id <> :userId")
-    boolean existsByUsuarioRefiridoIdAndNotSelfReference(@Param("userId") Long userId, @Param("userId") Long selfId);
+    @Query("SELECT CASE WHEN COUNT(r) > 0 THEN true ELSE false END FROM Referido r WHERE r.usuarioRefirido.id = :userId AND r.usuarioQueRefirio.id <> :selfId")
+    boolean existsByUsuarioRefiridoIdAndNotSelfReference(@Param("userId") Long userId, @Param("selfId") Long selfId);
 
     @Query("SELECT CASE WHEN COUNT(r) > 0 THEN true ELSE false END FROM Referido r WHERE r.usuarioRefirido.id = :userId AND r.usuarioQueRefirio.id = :referrerId")
     boolean existsByUsuarioRefiridoIdAndUsuarioQueRefirioId(@Param("userId") Long userId, @Param("referrerId") Long referrerId);

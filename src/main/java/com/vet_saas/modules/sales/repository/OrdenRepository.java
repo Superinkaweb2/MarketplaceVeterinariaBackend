@@ -102,4 +102,27 @@ public interface OrdenRepository extends JpaRepository<Orden, Long>, JpaSpecific
                         "AND o.usuarioCliente IS NOT NULL " +
                         "GROUP BY o.usuarioCliente.id")
         List<Object[]> findSpendSummaryByEmpresa(@Param("empresaId") Long empresaId);
+
+        @Query("SELECT COALESCE(SUM(o.total), 0) FROM Orden o WHERE o.usuarioCliente.id = :clienteId AND o.estado = 'PAGADO'")
+        BigDecimal sumTotalByUsuarioClienteId(@Param("clienteId") Long clienteId);
+
+        @Query("SELECT COUNT(o) FROM Orden o WHERE o.usuarioCliente.id = :clienteId")
+        Long countByUsuarioClienteId(@Param("clienteId") Long clienteId);
+
+        @Query("SELECT MAX(o.createdAt) FROM Orden o WHERE o.usuarioCliente.id = :clienteId")
+        LocalDateTime findMaxCreatedAtByUsuarioClienteId(@Param("clienteId") Long clienteId);
+
+        @Query("SELECT COALESCE(SUM(o.total), 0) FROM Orden o " +
+                        "WHERE o.usuarioCliente.id = :clienteId AND o.empresa.id = :empresaId AND o.estado = 'PAGADO'")
+        BigDecimal sumTotalByUsuarioClienteIdAndEmpresaId(
+                        @Param("clienteId") Long clienteId, @Param("empresaId") Long empresaId);
+
+        @Query("SELECT COUNT(o) FROM Orden o WHERE o.usuarioCliente.id = :clienteId AND o.empresa.id = :empresaId")
+        Long countByUsuarioClienteIdAndEmpresaId(
+                        @Param("clienteId") Long clienteId, @Param("empresaId") Long empresaId);
+
+        @Query("SELECT MAX(o.createdAt) FROM Orden o " +
+                        "WHERE o.usuarioCliente.id = :clienteId AND o.empresa.id = :empresaId")
+        LocalDateTime findMaxCreatedAtByUsuarioClienteIdAndEmpresaId(
+                        @Param("clienteId") Long clienteId, @Param("empresaId") Long empresaId);
 }

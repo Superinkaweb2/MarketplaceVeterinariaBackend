@@ -5,7 +5,6 @@ import com.mercadopago.resources.payment.Payment;
 import com.vet_saas.config.AppProperties;
 import com.vet_saas.core.exceptions.types.BusinessException;
 import com.vet_saas.core.exceptions.types.ForbiddenException;
-import com.vet_saas.core.utils.CryptoUtil;
 import com.vet_saas.modules.client.repository.ClienteRepository;
 import com.vet_saas.modules.company.model.Empresa;
 import com.vet_saas.modules.company.repository.EmpresaRepository;
@@ -44,7 +43,6 @@ public class PaymentService {
     private final AppProperties appProperties;
     private final MercadoPagoGateway mpGateway;
     private final ApplicationEventPublisher eventPublisher;
-    private final CryptoUtil cryptoUtil;
     private final ClienteRepository clienteRepository;
     private final VeterinarioRepository veterinarioRepository;
     private final com.vet_saas.modules.subscription.service.SubscriptionService subscriptionService;
@@ -86,30 +84,23 @@ public class PaymentService {
             throw new BusinessException("La orden ya fue procesada o no está disponible para pago");
         }
 
-        String accessToken;
         Long vendorId;
         String vendorType;
 
         if (orden.getEmpresa() != null) {
-            Empresa empresa = orden.getEmpresa();
-            if (empresa.getMpAccessToken() == null || empresa.getMpAccessToken().isBlank()) {
-                LOGGER.error("La empresa {} no tiene Access Token configurado", empresa.getId());
-                throw new BusinessException("La empresa no tiene configurada su cuenta de MercadoPago.");
-            }
-            accessToken = cryptoUtil.decrypt(empresa.getMpAccessToken());
-            vendorId = empresa.getId();
+            vendorId = orden.getEmpresa().getId();
             vendorType = "EMPRESA";
         } else if (orden.getVeterinario() != null) {
-            Veterinario veterinario = orden.getVeterinario();
-            if (veterinario.getMpAccessToken() == null || veterinario.getMpAccessToken().isBlank()) {
-                LOGGER.error("El veterinario {} no tiene Access Token configurado", veterinario.getId());
-                throw new BusinessException("Este veterinario no tiene configurada su cuenta de MercadoPago.");
-            }
-            accessToken = cryptoUtil.decrypt(veterinario.getMpAccessToken());
-            vendorId = veterinario.getId();
+            vendorId = orden.getVeterinario().getId();
             vendorType = "VETERINARIO";
         } else {
             throw new BusinessException("La orden no tiene un vendedor (Empresa/Veterinario) asociado.");
+        }
+
+        String accessToken = appProperties.getExternal().getMercadoPago().getAccessToken();
+        if (accessToken == null || accessToken.isBlank()) {
+            LOGGER.error("La plataforma no tiene configurado el Access Token de Mercado Pago");
+            throw new BusinessException("La plataforma no tiene configurada su pasarela de pagos.");
         }
 
         // Resolve payer info: guest vs authenticated
@@ -183,9 +174,7 @@ public class PaymentService {
             PreferencePayerRequest payer = payerBuilder.build();
 
             String webhookBase = appProperties.getExternal().getBackendUrl();
-            String notificationUrl = webhookBase + "/api/v1/payments/webhook/"
-                    + (orden.getEmpresa() != null ? orden.getEmpresa().getId()
-                            : "vet_" + orden.getVeterinario().getId());
+            String notificationUrl = webhookBase + "/api/v1/payments/webhook";
 
             PaymentPreferenceResponse response = mpGateway.createPreference(
                     accessToken,
@@ -346,21 +335,11 @@ public class PaymentService {
     }
 
     private String determineTokenToUse(String pathEmpresaId) {
-        if (pathEmpresaId == null) {
-            return appProperties.getExternal().getMercadoPago().getAccessToken();
+        String token = appProperties.getExternal().getMercadoPago().getAccessToken();
+        if (token == null || token.isBlank()) {
+            throw new BusinessException("La plataforma no tiene configurada su pasarela de pagos.");
         }
-
-        if (pathEmpresaId.startsWith("vet_")) {
-            Long vetId = Long.parseLong(pathEmpresaId.substring(4));
-            Veterinario veterinario = veterinarioRepository.findById(vetId)
-                    .orElseThrow(() -> new BusinessException("Veterinario " + vetId + " no encontrado"));
-            return cryptoUtil.decrypt(veterinario.getMpAccessToken());
-        }
-
-        Long empId = Long.parseLong(pathEmpresaId);
-        Empresa empresa = empresaRepository.findById(empId)
-                .orElseThrow(() -> new BusinessException("Empresa " + empId + " no encontrada"));
-        return cryptoUtil.decrypt(empresa.getMpAccessToken());
+        return token;
     }
 
     @Transactional

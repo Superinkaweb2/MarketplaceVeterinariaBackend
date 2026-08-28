@@ -7,6 +7,7 @@ import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
@@ -17,6 +18,7 @@ public class NewsletterService {
     private final NewsletterSubscriberRepository repository;
     private final EmailService emailService;
 
+    @Transactional
     public void subscribe(String email) {
         boolean isNewSubscription = repository.findByEmail(email).map(existing -> {
             if (!existing.isActivo()) {

@@ -22,7 +22,7 @@ public class ReferralController {
     public ResponseEntity<ApiResponse<String>> getReferralCode(
             @AuthenticationPrincipal Usuario usuario) {
         String code = referralService.generateReferralCode(usuario);
-        return ResponseEntity.ok(ApiResponse.success(code));
+        return ResponseEntity.ok(ApiResponse.<String>success(code));
     }
 
     @GetMapping("/count")

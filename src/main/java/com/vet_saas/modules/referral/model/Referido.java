@@ -30,7 +30,7 @@ public class Referido {
     @JoinColumn(name = "usuario_refirido_id", nullable = false, unique = true)
     private Usuario usuarioRefirido;
 
-    @Column(name = "codigo_referido", unique = true)
+    @Column(name = "codigo_referido")
     private String codigoReferido;
 
     @Column(name = "created_at")
