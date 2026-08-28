@@ -14,7 +14,7 @@ public interface ReferidoRepository extends JpaRepository<Referido, Long> {
 
     long countByUsuarioQueRefirioId(Long usuarioId);
 
-    Optional<Referido> findByCodigoReferido(String codigo);
+    List<Referido> findByCodigoReferido(String codigo);
 
     Optional<Referido> findByUsuarioRefiridoId(Long usuarioId);
 

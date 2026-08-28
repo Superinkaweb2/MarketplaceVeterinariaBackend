@@ -100,8 +100,8 @@ public class ReferralService {
      * Cuenta cuántos usuarios ha referido uno dado (excluyendo auto-referencias).
      */
     @Transactional(readOnly = true)
-    public ReferralCountResponse getReferralCount(Usuario usuario) {
-        long count = referidoRepository.countByUsuarioQueRefirioId(usuario.getId());
+    public ReferralCountResponse getReferralCount(Long usuarioId) {
+        long count = referidoRepository.countByUsuarioQueRefirioId(usuarioId);
         boolean desbloqueado = count >= REFERIDOS_PARA_DESBLOQUEO;
 
         return ReferralCountResponse.builder()
@@ -110,5 +110,10 @@ public class ReferralService {
                 .referidosNecesarios(REFERIDOS_PARA_DESBLOQUEO)
                 .referidosRestantes(Math.max(0, REFERIDOS_PARA_DESBLOQUEO - count))
                 .build();
+    }
+
+    @Transactional(readOnly = true)
+    public ReferralCountResponse getReferralCount(Usuario usuario) {
+        return getReferralCount(usuario.getId());
     }
 }
