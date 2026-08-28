@@ -3,6 +3,7 @@ package com.vet_saas.modules.client.service;
 import com.vet_saas.config.AppProperties;
 import com.vet_saas.core.exceptions.types.BusinessException;
 import com.vet_saas.core.exceptions.types.ResourceNotFoundException;
+import com.vet_saas.modules.appointment.repository.CitaRepository;
 import com.vet_saas.modules.client.dto.ClienteResponse;
 import com.vet_saas.modules.client.dto.CreateClienteDto;
 import com.vet_saas.modules.client.model.PerfilCliente;
@@ -11,7 +12,6 @@ import com.vet_saas.modules.company.model.Empresa;
 import com.vet_saas.modules.company.service.EmpresaLookupService;
 import com.vet_saas.modules.points.service.PointsService;
 import com.vet_saas.modules.sales.repository.OrdenRepository;
-import com.vet_saas.modules.appointment.repository.CitaRepository;
 import com.vet_saas.modules.user.model.Role;
 import com.vet_saas.modules.user.model.Usuario;
 import org.junit.jupiter.api.BeforeEach;
@@ -44,7 +44,8 @@ class ClienteServiceTest {
     @BeforeEach
     void setUp() {
         lenient().when(appProperties.getBusiness()).thenReturn(new AppProperties.Business());
-        clienteService = new ClienteService(clienteRepository, empresaLookupService, pointsService, appProperties, ordenRepository, citaRepository);
+        clienteService = new ClienteService(clienteRepository, empresaLookupService, pointsService,
+                appProperties, ordenRepository, citaRepository);
     }
 
     private Usuario buildUser(Long id) {

@@ -29,7 +29,7 @@ public class JwtService {
     private String buildToken(Usuario usuario, long expiration) {
         return Jwts.builder()
                 .subject(String.valueOf(usuario.getId()))
-                .claim("role", usuario.getRol().name())
+                .claim("role", usuario.getRol() != null ? usuario.getRol().name() : "SinRol")
                 .issuedAt(new Date())
                 .expiration(new Date(System.currentTimeMillis() + expiration))
                 .signWith(getSignInKey(), Jwts.SIG.HS256)

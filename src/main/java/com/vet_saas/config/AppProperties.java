@@ -18,6 +18,7 @@ public class AppProperties {
     private Notification notification = new Notification();
     private Business business = new Business();
     private Ia ia = new Ia();
+    private WebSocket webSocket = new WebSocket();
 
     @Data
     public static class Auth0 {
@@ -102,5 +103,13 @@ public class AppProperties {
         private String openaiModel = "gpt-4o-mini";
         private String groqApiKey;
         private String groqModel = "llama-3.3-70b-versatile";
+    }
+
+    @Data
+    public static class WebSocket {
+        private String clientLogin = "guest";
+        private String clientPasscode = "guest";
+        private String systemLogin = "guest";
+        private String systemPasscode = "guest";
     }
 }

@@ -3,6 +3,7 @@ package com.vet_saas.modules.dashboard.service;
 import com.vet_saas.modules.appointment.model.AppointmentStatus;
 import com.vet_saas.modules.appointment.model.Cita;
 import com.vet_saas.modules.appointment.repository.CitaRepository;
+import com.vet_saas.modules.company.repository.EmpresaRepository;
 import com.vet_saas.modules.dashboard.dto.*;
 import com.vet_saas.modules.sales.model.EstadoOrden;
 import com.vet_saas.modules.sales.model.Orden;
@@ -21,6 +22,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import org.springframework.cache.annotation.Cacheable;
+
 @Service
 @RequiredArgsConstructor
 public class DashboardService {
@@ -28,7 +31,16 @@ public class DashboardService {
     private final OrdenRepository ordenRepository;
     private final DetalleOrdenRepository detalleOrdenRepository;
     private final CitaRepository citaRepository;
+    private final EmpresaRepository empresaRepository;
 
+    @Cacheable(value = "empresasByPropietario", key = "#usuarioId")
+    public Long resolveEmpresaId(Long usuarioId) {
+        return empresaRepository.findByUsuarioPropietarioId(usuarioId)
+                .orElseThrow(() -> new IllegalStateException("Empresa no encontrada para el propietario actual"))
+                .getId();
+    }
+
+    @Cacheable(value = "dashboardMetrics", key = "#empresaId")
     @Transactional(readOnly = true)
     public DashboardMetricsDto getMetrics(Long empresaId) {
 
@@ -78,6 +90,7 @@ public class DashboardService {
                 .build();
     }
 
+    @Cacheable(value = "dashboardChart", key = "#empresaId")
     @Transactional(readOnly = true)
     public List<VentaDiariaDto> getChartData(Long empresaId) {
         LocalDateTime inicio30Dias = LocalDateTime.now().minusDays(30);
@@ -91,6 +104,7 @@ public class DashboardService {
                 .toList();
     }
 
+    @Cacheable(value = "dashboardActivity", key = "#empresaId")
     @Transactional(readOnly = true)
     public List<ActividadRecienteDto> getRecentActivity(Long empresaId) {
         List<ActividadRecienteDto> actividad = new ArrayList<>();

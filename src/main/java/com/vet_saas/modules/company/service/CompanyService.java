@@ -39,10 +39,6 @@ public class CompanyService {
             throw new BusinessException("El RUC ya está registrado");
         }
 
-        if ("OTRO".equalsIgnoreCase(dto.tipoServicio())) {
-            throw new BusinessException("Debe especificar el tipo de servicio");
-        }
-
         Empresa empresa = Empresa.builder()
                 .usuarioPropietario(usuario)
                 .nombreComercial(dto.nombreComercial())
@@ -80,9 +76,6 @@ public class CompanyService {
         if (dto.descripcion() != null)
             empresa.setDescripcion(dto.descripcion());
         if (dto.tipoServicio() != null) {
-            if ("OTRO".equalsIgnoreCase(dto.tipoServicio())) {
-                throw new BusinessException("Debe especificar el tipo de servicio");
-            }
             empresa.setTipoServicio(dto.tipoServicio());
         }
         if (dto.telefono() != null)

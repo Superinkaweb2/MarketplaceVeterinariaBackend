@@ -13,13 +13,52 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
 import java.time.Duration;
+import java.util.Iterator;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 @Component
 public class RateLimitFilter extends OncePerRequestFilter {
 
     private final ConcurrentMap<String, Bucket> buckets = new ConcurrentHashMap<>();
+    private final ConcurrentMap<String, Long> lastAccessTimes = new ConcurrentHashMap<>();
+    private static final long BUCKET_MAX_AGE_MS = 300_000; // 5 minutos
+
+    public RateLimitFilter() {
+        ScheduledExecutorService cleaner = Executors.newSingleThreadScheduledExecutor(r -> {
+            Thread t = new Thread(r, "rate-limit-cleaner");
+            t.setDaemon(true);
+            return t;
+        });
+        cleaner.scheduleAtFixedRate(this::evictStaleBuckets, 5, 5, TimeUnit.MINUTES);
+    }
+
+    private void evictStaleBuckets() {
+        long now = System.currentTimeMillis();
+        // Evict buckets older than BUCKET_MAX_AGE_MS
+        Iterator<Map.Entry<String, Long>> it = lastAccessTimes.entrySet().iterator();
+        while (it.hasNext()) {
+            Map.Entry<String, Long> entry = it.next();
+            if (now - entry.getValue() > BUCKET_MAX_AGE_MS) {
+                it.remove();
+                buckets.remove(entry.getKey());
+            }
+        }
+        // Safety net: if still too many buckets, remove oldest entries
+        if (buckets.size() > 1000) {
+            lastAccessTimes.entrySet().stream()
+                .sorted(Map.Entry.comparingByValue())
+                .limit(buckets.size() - 800)
+                .forEach(e -> {
+                    buckets.remove(e.getKey());
+                    lastAccessTimes.remove(e.getKey());
+                });
+        }
+    }
 
     @Override
     protected void doFilterInternal(HttpServletRequest request,
@@ -33,6 +72,7 @@ public class RateLimitFilter extends OncePerRequestFilter {
         String rateLimitKey = clientIp + ":" + path;
 
         Bucket bucket = buckets.computeIfAbsent(rateLimitKey, this::createBucket);
+        lastAccessTimes.put(rateLimitKey, System.currentTimeMillis());
 
         ConsumptionProbe probe = bucket.tryConsumeAndReturnRemaining(1);
 
@@ -64,6 +104,8 @@ public class RateLimitFilter extends OncePerRequestFilter {
             limit = Bandwidth.simple(5, Duration.ofMinutes(1));
         } else if (key.contains("/newsletter/subscribe")) {
             limit = Bandwidth.simple(3, Duration.ofMinutes(1));
+        } else if (key.contains("/referrals/apply")) {
+            limit = Bandwidth.simple(10, Duration.ofMinutes(1));
         } else {
             limit = Bandwidth.simple(30, Duration.ofMinutes(1));
         }
@@ -90,6 +132,7 @@ public class RateLimitFilter extends OncePerRequestFilter {
                 && !path.startsWith("/api/v1/payments/webhook")
                 && !path.startsWith("/api/v1/payments/checkout")
                 && !path.startsWith("/api/v1/reclamos")
-                && !path.startsWith("/api/v1/newsletter");
+                && !path.startsWith("/api/v1/newsletter")
+                && !path.startsWith("/api/v1/referrals/apply");
     }
 }

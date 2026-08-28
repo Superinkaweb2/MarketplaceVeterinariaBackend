@@ -58,10 +58,10 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
             config.enableStompBrokerRelay("/topic", "/queue")
                     .setRelayHost(redisHost)
                     .setRelayPort(redisPort)
-                    .setClientLogin("guest")
-                    .setClientPasscode("guest")
-                    .setSystemLogin("guest")
-                    .setSystemPasscode("guest");
+                    .setClientLogin(appProperties.getWebSocket().getClientLogin())
+                    .setClientPasscode(appProperties.getWebSocket().getClientPasscode())
+                    .setSystemLogin(appProperties.getWebSocket().getSystemLogin())
+                    .setSystemPasscode(appProperties.getWebSocket().getSystemPasscode());
         } else {
             config.enableSimpleBroker("/topic", "/queue");
         }
@@ -112,10 +112,17 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
                                         userDetails, null, userDetails.getAuthorities());
                                 accessor.setUser(auth);
                                 log.info("WS CONNECT autenticado para el usuario: {}", userDetails.getUsername());
+                            } else {
+                                log.warn("WS CONNECT rechazado: token inválido");
+                                return null;
                             }
                         } catch (Exception e) {
-                            log.error("Error validando token en STOMP", e);
+                            log.error("WS CONNECT rechazado: error validando token", e);
+                            return null;
                         }
+                    } else {
+                        log.warn("WS CONNECT rechazado: token de autenticación ausente");
+                        return null;
                     }
                 }
                 return message;

@@ -22,8 +22,8 @@ public interface ClienteRepository extends JpaRepository<PerfilCliente, Long> {
         boolean existsByUsuarioIdAndActivoTrue(Long usuarioId);
 
         @Query("SELECT c FROM PerfilCliente c WHERE c.activo = true AND (" +
-                        "LOWER(c.nombres) LIKE LOWER(CONCAT('%', :q, '%')) OR " +
-                        "LOWER(c.apellidos) LIKE LOWER(CONCAT('%', :q, '%')))")
+                        "LOWER(c.nombres) LIKE LOWER(CONCAT('%', CAST(:q AS string), '%')) OR " +
+                        "LOWER(c.apellidos) LIKE LOWER(CONCAT('%', CAST(:q AS string), '%')))")
         Page<PerfilCliente> searchByNombre(@Param("q") String q, Pageable pageable);
 
         @Query(value = "SELECT DISTINCT c FROM PerfilCliente c " +

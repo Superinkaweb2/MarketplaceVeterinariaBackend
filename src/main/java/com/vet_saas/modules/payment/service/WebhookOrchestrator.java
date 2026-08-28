@@ -3,12 +3,7 @@ package com.vet_saas.modules.payment.service;
 import com.mercadopago.resources.payment.Payment;
 import com.vet_saas.config.AppProperties;
 import com.vet_saas.core.exceptions.types.BusinessException;
-import com.vet_saas.core.utils.CryptoUtil;
-import com.vet_saas.modules.company.model.Empresa;
-import com.vet_saas.modules.company.repository.EmpresaRepository;
 import com.vet_saas.modules.payment.gateway.MercadoPagoGateway;
-import com.vet_saas.modules.veterinarian.model.Veterinario;
-import com.vet_saas.modules.veterinarian.repository.VeterinarioRepository;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -26,9 +21,6 @@ public class WebhookOrchestrator {
     private final MercadoPagoGateway mpGateway;
     private final PaymentService paymentService;
     private final AppProperties appProperties;
-    private final CryptoUtil cryptoUtil;
-    private final EmpresaRepository empresaRepository;
-    private final VeterinarioRepository veterinarioRepository;
 
     @Async("webhookExecutor")
     public void processWebhookAsync(String paymentId, String pathEmpresaId) {
@@ -48,20 +40,10 @@ public class WebhookOrchestrator {
     }
 
     private String determineTokenToUse(String pathEmpresaId) {
-        if (pathEmpresaId == null) {
-            return appProperties.getExternal().getMercadoPago().getAccessToken();
+        String token = appProperties.getExternal().getMercadoPago().getAccessToken();
+        if (token == null || token.isBlank()) {
+            throw new BusinessException("La plataforma no tiene configurada su pasarela de pagos.");
         }
-
-        if (pathEmpresaId.startsWith("vet_")) {
-            Long vetId = Long.parseLong(pathEmpresaId.substring(4));
-            Veterinario veterinario = veterinarioRepository.findById(vetId)
-                    .orElseThrow(() -> new BusinessException("Veterinario " + vetId + " no encontrado"));
-            return cryptoUtil.decrypt(veterinario.getMpAccessToken());
-        }
-
-        Long empId = Long.parseLong(pathEmpresaId);
-        Empresa empresa = empresaRepository.findById(empId)
-                .orElseThrow(() -> new BusinessException("Empresa " + empId + " no encontrada"));
-        return cryptoUtil.decrypt(empresa.getMpAccessToken());
+        return token;
     }
 }

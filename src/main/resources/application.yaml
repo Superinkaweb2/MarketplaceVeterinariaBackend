@@ -141,6 +141,12 @@ app:
     groq-api-key: ${GROQ_API_KEY}
     groq-model: ${GROQ_MODEL:llama-3.3-70b-versatile}
 
+  websocket:
+    client-login: ${WS_CLIENT_LOGIN:guest}
+    client-passcode: ${WS_CLIENT_PASSCODE:guest}
+    system-login: ${WS_SYSTEM_LOGIN:guest}
+    system-passcode: ${WS_SYSTEM_PASSCODE:guest}
+
 logging:
   level:
     root: INFO

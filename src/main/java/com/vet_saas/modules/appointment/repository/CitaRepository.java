@@ -23,6 +23,9 @@ public interface CitaRepository extends JpaRepository<Cita, Long> {
 
     List<Cita> findByClienteId(Long clienteId);
 
+    @Query("SELECT COUNT(c) FROM Cita c WHERE c.cliente.id = :clienteId")
+    long countByClienteId(@Param("clienteId") Long clienteId);
+
     List<Cita> findByEmpresaIdAndFechaProgramada(Long empresaId, LocalDate fecha);
 
     List<Cita> findByVeterinarioIdAndFechaProgramada(Long veterinarioId, LocalDate fecha);
