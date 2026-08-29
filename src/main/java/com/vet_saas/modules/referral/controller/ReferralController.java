@@ -21,7 +21,7 @@ public class ReferralController {
     @PreAuthorize("hasRole('CLIENTE')")
     public ResponseEntity<ApiResponse<String>> getReferralCode(
             @AuthenticationPrincipal Usuario usuario) {
-        String code = referralService.generateReferralCode(usuario);
+        String code = referralService.getOrGenerateReferralCode(usuario);
         return ResponseEntity.ok(ApiResponse.<String>success(code));
     }
 

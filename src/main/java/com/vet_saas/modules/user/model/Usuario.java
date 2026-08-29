@@ -48,6 +48,9 @@ public class Usuario implements UserDetails {
     @Column(name = "auth0_sub", unique = true)
     private String auth0Sub;
 
+    @Column(name = "codigo_referral", unique = true, length = 20)
+    private String codigoReferral;
+
     @Column(name = "created_at")
     private LocalDateTime createdAt;
 
