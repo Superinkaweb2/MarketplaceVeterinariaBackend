@@ -46,14 +46,14 @@ public class AuthController {
     public ResponseEntity<ApiResponse<Void>> logout(@RequestBody @Valid LogoutRequest request) {
         refreshTokenService.revokeRefreshToken(request.refreshToken());
         return ResponseEntity.ok(
-                ApiResponse.success("Sesión cerrada exitosamente"));
+                ApiResponse.successMessage("Sesión cerrada exitosamente"));
     }
 
     @PostMapping("/logout-all")
     public ResponseEntity<ApiResponse<Void>> logoutAll(@AuthenticationPrincipal Usuario usuario) {
         refreshTokenService.revokeAllByUser(usuario.getId());
         return ResponseEntity.ok(
-                ApiResponse.success("Todas las sesiones han sido cerradas"));
+                ApiResponse.successMessage("Todas las sesiones han sido cerradas"));
     }
 
     @PostMapping("/change-password")
@@ -62,7 +62,7 @@ public class AuthController {
             @RequestBody @Valid ChangePasswordRequest request) {
         authService.changePassword(usuario.getId(), request);
         return ResponseEntity.ok(
-                ApiResponse.success("Contraseña actualizada exitosamente"));
+                ApiResponse.successMessage("Contraseña actualizada exitosamente"));
     }
 
     @org.springframework.web.bind.annotation.GetMapping("/verify-email")
@@ -70,21 +70,21 @@ public class AuthController {
             @org.springframework.web.bind.annotation.RequestParam String token) {
         authService.verifyEmail(token);
         return ResponseEntity.ok(
-                ApiResponse.success("Correo verificado exitosamente"));
+                ApiResponse.successMessage("Correo verificado exitosamente"));
     }
 
     @PostMapping("/forgot-password")
     public ResponseEntity<ApiResponse<Void>> forgotPassword(@RequestBody @Valid ForgotPasswordRequest request) {
         authService.forgotPassword(request.correo());
         return ResponseEntity.ok(
-                ApiResponse.success("Se ha enviado un correo para restablecer tu contraseña"));
+                ApiResponse.successMessage("Se ha enviado un correo para restablecer tu contraseña"));
     }
 
     @PostMapping("/reset-password")
     public ResponseEntity<ApiResponse<Void>> resetPassword(@RequestBody @Valid ResetPasswordRequest request) {
         authService.resetPassword(request.token(), request.newPassword());
         return ResponseEntity.ok(
-                ApiResponse.success("Tu contraseña ha sido restablecida exitosamente"));
+                ApiResponse.successMessage("Tu contraseña ha sido restablecida exitosamente"));
     }
 
     @PostMapping("/sync")
